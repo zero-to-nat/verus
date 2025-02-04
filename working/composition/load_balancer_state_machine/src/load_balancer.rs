@@ -1,7 +1,6 @@
 use vstd::prelude::*;
 use vstd::multiset::*;
 use state_machines_macros::tokenized_state_machine;
-use crate::client::*;
 use crate::stateless_svc::*;
 use crate::stateless_svc::process;
 
@@ -47,87 +46,166 @@ tokenized_state_machine! {
     LoadBalancerSM<S: StatelessSvc> {
         fields {
             #[sharding(multiset)]
-            pub requests_sent: Multiset<SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>>,
+            pub received_client: Multiset<SvcRequest<S::RequestContents>>,
 
             #[sharding(multiset)]
-            pub responses_sent: Multiset<SvcResponse<S::ResponseContents>>,
+            pub sent_client: Multiset<SvcResponse<S::ResponseContents>>,
+
+            #[sharding(multiset)]
+            pub sent_server: Multiset<SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>>,
+
+            #[sharding(multiset)]
+            pub received_server: Multiset<SvcResponse<<LoadBalancedSvc<S> as StatelessSvc>::ResponseContents>>,
         }
 
         init! {
             initialize() {
-                init requests_sent = Multiset::<SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>>::empty();
-                init responses_sent = Multiset::<SvcResponse<S::ResponseContents>>::empty();
+                init received_client = Multiset::<SvcRequest<S::RequestContents>>::empty();
+                init sent_client = Multiset::<SvcResponse<S::ResponseContents>>::empty();
+                init sent_server = Multiset::<SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>>::empty();
+                init received_server = Multiset::<SvcResponse<<LoadBalancedSvc<S> as StatelessSvc>::ResponseContents>>::empty();
             }
         }
 
         transition! {
-            forward_request(msg: ClientSM::sent<S>, cl_id: u32, s_no: u32) {
-                require S::pre(msg@.key.req);
-                let inner_req = msg@.key;
-                add requests_sent += { 
-                    SvcRequest {
-                        client_id: cl_id,
-                        seq_no: s_no,
-                        req: LoadBalancedSvcRequest { client_req: inner_req }
-                    }
-                };
+            recv_client(client_req: SvcRequest<S::RequestContents>) {
+                require S::pre(client_req.req);
+
+                add received_client += { client_req };
             }
         }
 
         transition! {
-            forward_response(msg: StatelessSvcSM::sent<LoadBalancedSvc<S>>) {
-                have requests_sent >= { msg@.key.0@.key };
-                require process::<LoadBalancedSvc<S>>(msg@.key.0@.key, msg@.key.1);
-                assert process::<S>(msg@.key.0@.key.req.client_req, msg@.key.1.resp.server_resp);
-                add responses_sent += { msg@.key.1.resp.server_resp };
+            send_server(client_req: SvcRequest<S::RequestContents>, server_req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>) {
+                have received_client >= { client_req };
+                require server_req.req.client_req == client_req;
+
+                add sent_server += { server_req };
+            }
+        }
+
+        transition! {
+            recv_server(server_req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>, server_resp: SvcResponse<<LoadBalancedSvc<S> as StatelessSvc>::ResponseContents>) {
+                have sent_server >= { server_req };
+                require process::<LoadBalancedSvc<S>>(server_req, server_resp);
+
+                add received_server += { server_resp };
+            }
+        }
+
+        transition! {
+            send_client(server_resp: SvcResponse<<LoadBalancedSvc<S> as StatelessSvc>::ResponseContents>, client_resp: SvcResponse<S::ResponseContents>) {
+                have received_server >= { server_resp };
+                require server_resp.resp.server_resp == client_resp;
+
+                add sent_client += { client_resp };
             }
         }
 
         #[invariant]
-        pub open spec fn requests_sent_inv(&self) -> bool {
-            forall |req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] self.requests_sent.contains(req) ==> S::pre(req.req.client_req.req)
+        pub open spec fn received_client_inv(&self) -> bool {
+            forall |req: SvcRequest<S::RequestContents>| #[trigger] self.received_client.contains(req) ==> S::pre(req.req)
         }
 
         #[invariant]
-        pub open spec fn responses_sent_inv(&self) -> bool {
-            forall |resp: SvcResponse<S::ResponseContents>| #[trigger] self.responses_sent.contains(resp) ==> 
-            exists |req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] self.requests_sent.contains(req) && process::<S>(req.req.client_req, resp)
+        pub open spec fn sent_server_inv(&self) -> bool {
+            forall |server_req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] self.sent_server.contains(server_req) ==>
+            exists |client_req: SvcRequest<S::RequestContents>| #[trigger] self.received_client.contains(client_req) && server_req.req.client_req == client_req
+        }
+
+        #[invariant]
+        pub open spec fn received_server_inv(&self) -> bool {
+            forall |server_resp: SvcResponse<<LoadBalancedSvc<S> as StatelessSvc>::ResponseContents>| #[trigger] self.received_server.contains(server_resp) ==>
+            exists |server_req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] self.sent_server.contains(server_req) && process::<LoadBalancedSvc<S>>(server_req, server_resp)
+        }
+
+        #[invariant]
+        pub open spec fn sent_client_inv(&self) -> bool {
+            forall |client_resp: SvcResponse<S::ResponseContents>| #[trigger] self.sent_client.contains(client_resp) ==>
+            exists |client_req: SvcRequest<S::RequestContents>| #[trigger] self.received_client.contains(client_req) && process::<S>(client_req, client_resp) 
         }
 
         #[inductive(initialize)]
         fn initialize_inductive(post: Self) { }
-       
-        #[inductive(forward_request)]
-        fn forward_request_inductive(pre: Self, post: Self, msg: ClientSM::sent<S>, cl_id: u32, s_no: u32) { 
-            assert forall |req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] post.requests_sent.contains(req) implies 
-            S::pre(req.req.client_req.req)
-            by {
-                if (req.req.client_req == msg@.key) {
+
+        #[inductive(recv_client)]
+        fn recv_client_inductive(pre: Self, post: Self, client_req: SvcRequest<S::RequestContents>) { 
+            assert forall |req: SvcRequest<S::RequestContents>| #[trigger] post.received_client.contains(req) implies S::pre(req.req) by {
+                if (client_req == req) {
                 } else {
-                    assert(pre.requests_sent.contains(req));
+                    assert(pre.received_client.contains(req));
                 }
             }
 
-            assert forall |resp: SvcResponse<S::ResponseContents>| #[trigger] post.responses_sent.contains(resp) implies 
-            exists |req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] post.requests_sent.contains(req) && process::<S>(req.req.client_req, resp)
+            assert forall |server_req1: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| post.sent_server.contains(server_req1) implies
+            exists |client_req1: SvcRequest<S::RequestContents>| post.received_client.contains(client_req1) && server_req1.req.client_req == client_req1
             by {
-                assert(pre.responses_sent.contains(resp));
-                let req = choose |req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] pre.requests_sent.contains(req) && process::<S>(req.req.client_req, resp);
-                assert(post.requests_sent.contains(req));
+                assert(pre.sent_server.contains(server_req1));
+                let client_req1 = choose |client_req1: SvcRequest<S::RequestContents>| pre.received_client.contains(client_req1) && server_req1.req.client_req == client_req1;
+                assert(post.received_client.contains(client_req1));
+            }
+
+            assert forall |client_resp1: SvcResponse<S::ResponseContents>| #[trigger] post.sent_client.contains(client_resp1) implies
+            exists |client_req1: SvcRequest<S::RequestContents>| #[trigger] post.received_client.contains(client_req1) && process::<S>(client_req1, client_resp1)
+            by {
+                assert(pre.sent_client.contains(client_resp1));
+                let client_req1 = choose |client_req1: SvcRequest<S::RequestContents>| #[trigger] pre.received_client.contains(client_req1) && process::<S>(client_req1, client_resp1);
+                assert(post.received_client.contains(client_req1));
             }
         }
        
-        #[inductive(forward_response)]
-        fn forward_response_inductive(pre: Self, post: Self, msg: StatelessSvcSM::sent<LoadBalancedSvc<S>>) { 
-            assert forall |resp: SvcResponse<S::ResponseContents>| #[trigger] post.responses_sent.contains(resp) implies 
-            exists |req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] post.requests_sent.contains(req) && process::<S>(req.req.client_req, resp)
+        #[inductive(send_server)]
+        fn send_server_inductive(pre: Self, post: Self, client_req: SvcRequest<S::RequestContents>, server_req: SvcRequest<<LoadBalancedSvc<S>as StatelessSvc>::RequestContents>) { 
+            assert forall |server_req1: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] post.sent_server.contains(server_req1) implies
+            exists |client_req1: SvcRequest<S::RequestContents>| #[trigger] post.received_client.contains(client_req1) && server_req1.req.client_req == client_req1
             by {
-                if (msg@.key.1.resp.server_resp == resp) {
-                    assert(pre.requests_sent.contains(msg@.key.0@.key));
+                if (server_req == server_req1) {
+                    assert(pre.received_client.contains(client_req));
                 } else {
-                    assert(pre.responses_sent.contains(resp));
-                    let req = choose |req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] pre.requests_sent.contains(req) && process::<S>(req.req.client_req, resp);
-                    assert(post.requests_sent.contains(req));
+                    assert(pre.sent_server.contains(server_req1));
+                    let client_req1 = choose |client_req1: SvcRequest<S::RequestContents>| #[trigger] pre.received_client.contains(client_req1) && server_req1.req.client_req == client_req1;
+                    assert(post.received_client.contains(client_req1));
+                }
+            }
+
+            assert forall |server_resp1: SvcResponse<<LoadBalancedSvc<S> as StatelessSvc>::ResponseContents>| #[trigger] post.received_server.contains(server_resp1) implies
+            exists |server_req1: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] post.sent_server.contains(server_req1) && process::<LoadBalancedSvc<S>>(server_req1, server_resp1)
+            by {
+                assert(pre.received_server.contains(server_resp1));
+                let server_req1 = choose |server_req1: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] pre.sent_server.contains(server_req1) && process::<LoadBalancedSvc<S>>(server_req1, server_resp1);
+                assert(post.sent_server.contains(server_req1));
+            }
+        }
+       
+        #[inductive(recv_server)]
+        fn recv_server_inductive(pre: Self, post: Self, server_req: SvcRequest<<LoadBalancedSvc<S>as StatelessSvc>::RequestContents>, server_resp: SvcResponse<<LoadBalancedSvc<S>as StatelessSvc>::ResponseContents>) { 
+            assert forall |server_resp1: SvcResponse<<LoadBalancedSvc<S> as StatelessSvc>::ResponseContents>| #[trigger] post.received_server.contains(server_resp1) implies
+            exists |server_req1: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] post.sent_server.contains(server_req1) && process::<LoadBalancedSvc<S>>(server_req1, server_resp1)
+            by {
+                if (server_resp == server_resp1) {
+                    assert(pre.sent_server.contains(server_req));
+                } else {
+                    assert(pre.received_server.contains(server_resp1));
+                    let server_req1 = choose |server_req1: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] pre.sent_server.contains(server_req1) && process::<LoadBalancedSvc<S>>(server_req1, server_resp1);
+                    assert(post.sent_server.contains(server_req1));
+                }
+            }
+        }
+       
+        #[inductive(send_client)]
+        fn send_client_inductive(pre: Self, post: Self, server_resp: SvcResponse<<LoadBalancedSvc<S>as StatelessSvc>::ResponseContents>, client_resp: SvcResponse<S::ResponseContents>) { 
+            assert forall |client_resp1: SvcResponse<S::ResponseContents>| #[trigger] post.sent_client.contains(client_resp1) implies
+            exists |client_req1: SvcRequest<S::RequestContents>| #[trigger] post.received_client.contains(client_req1) && process::<S>(client_req1, client_resp1)
+            by {
+                if (client_resp == client_resp1) {
+                    assert(pre.received_server.contains(server_resp));
+                    let server_req = choose |server_req: SvcRequest<<LoadBalancedSvc<S> as StatelessSvc>::RequestContents>| #[trigger] pre.sent_server.contains(server_req) && process::<LoadBalancedSvc<S>>(server_req, server_resp);
+                    let client_req = choose |client_req: SvcRequest<S::RequestContents>| #[trigger] pre.received_client.contains(client_req) && server_req.req.client_req == client_req;
+                    assert(process::<S>(client_req, client_resp)); 
+                } else {
+                    assert(pre.sent_client.contains(client_resp1));
+                    let client_req1 = choose |client_req1: SvcRequest<S::RequestContents>| #[trigger] pre.received_client.contains(client_req1) && process::<S>(client_req1, client_resp1);
+                    assert(post.received_client.contains(client_req1));
                 }
             }
         }
