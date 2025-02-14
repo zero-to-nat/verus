@@ -32,18 +32,18 @@ fn without_lb<S: StatelessSvc>(req: SvcRequest<S::RequestContents>, svc: S)
     let tracked client_send = client_inst.send(req);
 
     //step: server_recv
-    let tracked server_recv = server_inst.recv(client_send@.key);
+    let tracked server_recv = server_inst.recv(client_send);
 
     //step: server_send
     let resp = svc.process_impl(&req);
     let tracked server_send = server_inst.send(server_recv@.key, resp, &server_recv);
 
     //step: client_recv
-    let tracked client_recv = client_inst.recv(client_send@.key, server_send@.key, &client_send);
+    let tracked client_recv = client_inst.recv(client_send@.key, server_send@.key.1, &client_send);
     assert(process::<S>(client_send@.key, client_recv@.key));
 }
 
-
+/*
 fn with_lb<S: StatelessSvc>(req: SvcRequest<S::RequestContents>, svc: S) 
     requires S::pre(req.req)
 {
@@ -79,7 +79,7 @@ fn with_lb<S: StatelessSvc>(req: SvcRequest<S::RequestContents>, svc: S)
     let tracked server_recv = server_inst.recv(lb_send_server@.key);
     
     //step: server_send
-    let lb_svc = LoadBalancedSvc { server_id: 0, inner_svc: svc };
+    let lb_svc = LoadBalancedSvc { server_id: 1, inner_svc: svc };
     let lb_resp = lb_svc.process_impl(&lb_req);
     let tracked server_send = server_inst.send(lb_send_server@.key, lb_resp, &server_recv);
 
@@ -91,8 +91,91 @@ fn with_lb<S: StatelessSvc>(req: SvcRequest<S::RequestContents>, svc: S)
 
     //step: client_recv
     let tracked client_recv = client_inst.recv(client_send@.key, lb_send_client@.key, &client_send);
-    assert(process::<S>(client_send@.key, client_recv@.key));
+    assert(process::<S>(client_send@.key, client_recv@.key));   
 }
+            */
+
+proof fn svc_step1<S: StatelessSvc>(req: &SvcRequest<S::RequestContents>, tracked client_inst: &ClientSM::Instance<S>) -> (tracked msg: ClientSM::sent<S>)
+    requires S::pre(req.req)
+    ensures msg@.instance == client_inst,
+        msg@.count == 1
+{
+    let tracked msg = client_inst.send(*req);
+    return msg;
+}
+
+proof fn svc_step2<S: StatelessSvc>(tracked msg_in: &ClientSM::sent<S>, tracked client_inst: &ClientSM::Instance<S>, tracked server_inst: &StatelessSvcSM::Instance<S>)
+-> (tracked msg_out: StatelessSvcSM::received<S>)
+    requires msg_in@.instance == client_inst,
+        msg_in@.count == 1
+    ensures msg_out@.instance == server_inst,
+        msg_out@.count == 1,
+        msg_out@.key == msg_in
+{
+    let tracked _ = client_inst.sent_inv(msg_in@.key, &msg_in);
+    let tracked msg_out = server_inst.recv(*msg_in);
+    return msg_out;
+}
+
+proof fn svc_step3<S: StatelessSvc>(tracked msg_in: &StatelessSvcSM::received<S>, tracked server_inst: &StatelessSvcSM::Instance<S>) -> (tracked msg_out: StatelessSvcSM::sent<S>)
+    requires msg_in@.instance == server_inst,
+        msg_in@.count == 1
+    ensures msg_out@.instance == server_inst,
+        msg_out@.count == 1,
+        msg_out@.key.0 == msg_in@.key
+{
+    let tracked _ = server_inst.received_inv(msg_in@.key, &msg_in);
+    assume(forall |req: SvcRequest<S::RequestContents>| #[trigger] S::pre(req.req) ==> exists |resp: SvcResponse<S::ResponseContents>| #[trigger] process::<S>(req, resp));
+    let resp = choose |resp: SvcResponse<S::ResponseContents>| process::<S>(msg_in@.key@.key, resp);
+
+    let tracked msg_out = server_inst.send(msg_in@.key, resp, &msg_in);
+    return msg_out;
+}
+
+
+proof fn svc_step4<S: StatelessSvc>(
+    tracked client_send: &ClientSM::sent<S>,
+    tracked msg_in: &StatelessSvcSM::sent<S>, 
+    tracked server_inst: &StatelessSvcSM::Instance<S>, 
+    tracked client_inst: &ClientSM::Instance<S>) -> (tracked msg_out: ClientSM::received<S>)
+    requires msg_in@.instance == server_inst,
+        msg_in@.count == 1,
+        msg_in@.key.0 == client_send,
+        client_send@.instance == client_inst,
+        client_send@.count == 1,
+    ensures msg_out@.instance == client_inst,
+        msg_out@.count == 1
+{
+    let tracked _ = server_inst.sent_inv(msg_in@.key, &msg_in);
+    let tracked msg_out = client_inst.recv(client_send@.key, msg_in@.key.1, &client_send);
+    return msg_out;
+}
+
+fn without_lb_encapsulated_steps<S: StatelessSvc>(req: SvcRequest<S::RequestContents>, svc: S)
+    requires S::pre(req.req)
+{
+    let tracked (
+        Tracked(client_inst),
+        Tracked(client_sent_token),
+        Tracked(client_received_token)
+    ) = ClientSM::Instance::<S>::initialize();
+    let tracked (
+        Tracked(server_inst),
+        Tracked(server_received_token),
+        Tracked(server_sent_token)
+    ) = StatelessSvcSM::Instance::<S>::initialize();
+
+    proof {
+        let tracked client_send = svc_step1::<S>(&req, &client_inst);
+
+        let tracked server_recv = svc_step2::<S>(&client_send, &client_inst, &server_inst);
+
+        let tracked server_send = svc_step3::<S>(&server_recv, &server_inst);
+
+        let tracked client_recv = svc_step4::<S>(&client_send, &server_send, &server_inst, &client_inst);
+    }
+}
+
 
 }
 

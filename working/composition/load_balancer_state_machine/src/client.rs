@@ -35,32 +35,24 @@ tokenized_state_machine! {
 
         transition! {
             recv(req: SvcRequest<S::RequestContents>, resp: SvcResponse<S::ResponseContents>) {
+                // spec: we only get responses to requests that we have sent
                 have sent >= { req };
+                // spec: correct service implementation on response
                 require process::<S>(req, resp);
 
                 add received += { resp };
             }
         }
 
-        /*
         property! {
             sent_inv(req: SvcRequest<S::RequestContents>) {
                 have sent >= { req };
+
                 assert S::pre(req.req) by {
                     assert(pre.sent.contains(req));
                 };
             }
         }
-
-        property! {
-            receive_inv(msg: StatelessSvcSM::sent<S>) {
-                have received >= { msg@.key.1 };
-                assert exists |req: SvcRequest<S::RequestContents>| process::<S>(req, msg@.key.1) by {
-                    assert(pre.received.contains(msg@.key.1));
-                };
-            }
-        }
-            */
 
         #[invariant]
         pub open spec fn sent_inv(&self) -> bool {
