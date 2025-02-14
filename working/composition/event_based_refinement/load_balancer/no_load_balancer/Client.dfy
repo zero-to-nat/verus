@@ -17,13 +17,13 @@ module ClientHost {
         && !v.sentRequest
         && v'.sentRequest
         && msgOps.recv.None?
-        && msgOps.send == Some(ClientRequest(c.x, c.y))
+        && msgOps.send == Some(Request(c.x, c.y))
     }
 
     ghost predicate ReceiveResponse(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
         && v.sentRequest == v'.sentRequest
         && msgOps.recv.Some?
-        && msgOps.recv.value.ClientResponse?
+        && msgOps.recv.value.Response?
         && msgOps.send.None?
         && v.resp.None?
         && v'.resp == Some(msgOps.recv.value.sum)
@@ -33,10 +33,7 @@ module ClientHost {
     {
         match evt {
             case Compute => v == v'
-            case NoOp => 
-            SendRequest(c, v, v', evt, msgOps) 
-            || ReceiveResponse(c, v, v', evt, msgOps) 
-            || ((msgOps.send.None? || !msgOps.send.value.ClientRequest?) && (msgOps.recv.None? || !msgOps.recv.value.ClientResponse?) && v == v')
+            case NoOp => SendRequest(c, v, v', evt, msgOps) || ReceiveResponse(c, v, v', evt, msgOps)
         }
     }
 }

@@ -4,10 +4,8 @@ module Types {
     datatype Event = Compute | NoOp
 
     datatype Message =
-    | ClientRequest(x: int, y: int)
-    | LBRequest(x: int, y: int)
-    | LBResponse(sum: int)
-    | ClientResponse(sum: int)
+    | Request(x: int, y: int)
+    | Response(sum: int)
 
     datatype MessageOps = MessageOps(recv:Option<Message>, send:Option<Message>)
 }

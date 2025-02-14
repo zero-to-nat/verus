@@ -13,8 +13,8 @@ module ServerHost {
 
     ghost predicate Compute(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
         && msgOps.recv.Some?
-        && msgOps.recv.value.LBRequest?
-        && msgOps.send == Some(LBResponse(msgOps.recv.value.x + msgOps.recv.value.y))
+        && msgOps.recv.value.Request?
+        && msgOps.send == Some(Response(msgOps.recv.value.x + msgOps.recv.value.y))
         && v.sum.None?
         && v'.sum == Some(msgOps.recv.value.x + msgOps.recv.value.y)
     }
@@ -23,7 +23,7 @@ module ServerHost {
     {
         match evt {
             case Compute => Compute(c, v, v', evt, msgOps)
-            case NoOp => v == v' && (msgOps.send.None? || !msgOps.send.value.LBResponse?)
+            case NoOp => v == v'
         }
     }
 }

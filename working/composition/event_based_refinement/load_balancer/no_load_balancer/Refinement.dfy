@@ -1,7 +1,6 @@
 include "AdditionServiceSpec.dfy"
 include "Client.dfy"
 include "Server.dfy"
-include "LoadBalancer.dfy"
 include "Network.dfy"
 include "DistributedSystem.dfy"
 
@@ -33,7 +32,6 @@ abstract module RefinementTheorem {
 module RefinementProof refines RefinementTheorem {
     import ClientHost
     import ServerHost
-    import LoadBalancerHost
     import Network
 
     ghost function ConstantsAbstraction(c: DistributedSystem.Constants) : Spec.Constants
@@ -51,10 +49,8 @@ module RefinementProof refines RefinementTheorem {
     ghost predicate Inv(c: DistributedSystem.Constants, v: DistributedSystem.Variables)
     {
         && (v.server.sum.Some? ==> v.server.sum.value == c.client.x + c.client.y)
-        && (forall msg :: msg in v.network.sentMsgs && msg.ClientRequest? ==> msg == ClientRequest(c.client.x, c.client.y))
-        && (forall msg :: msg in v.network.sentMsgs && msg.LBRequest? ==> msg == LBRequest(c.client.x, c.client.y))
-        && (forall msg :: msg in v.network.sentMsgs && msg.LBResponse? ==> msg == LBResponse(c.client.x + c.client.y))
-        && (forall msg :: msg in v.network.sentMsgs && msg.ClientResponse? ==> msg == ClientResponse(c.client.x + c.client.y))
+        && (forall msg :: msg in v.network.sentMsgs && msg.Request? ==> msg == Request(c.client.x, c.client.y))
+        && (forall msg :: msg in v.network.sentMsgs && msg.Response? ==> msg == Response(c.client.x + c.client.y))
     }
 
     lemma RefinementInit(c: DistributedSystem.Constants, v: DistributedSystem.Variables)
@@ -63,7 +59,7 @@ module RefinementProof refines RefinementTheorem {
 //        ensures Spec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
     {
     }
-
+    
     lemma RefinementNext(c: DistributedSystem.Constants, v: DistributedSystem.Variables, v': DistributedSystem.Variables, evt: Event)
 //        requires DistributedSystem.Next(c, v, v', evt)
 //        requires Inv(c, v)

@@ -1,7 +1,6 @@
 include "AdditionServiceSpec.dfy"
 include "Client.dfy"
 include "Server.dfy"
-include "LoadBalancer.dfy"
 include "Network.dfy"
 
 module DistributedSystem {
@@ -9,14 +8,12 @@ module DistributedSystem {
     import Network
     import ClientHost
     import ServerHost
-    import LoadBalancerHost
 
     // for now: single client, single server
 
     datatype Constants = Constants(
         client: ClientHost.Constants,
         server: ServerHost.Constants,
-        loadBalancer: LoadBalancerHost.Constants,
         network: Network.Constants) 
     {
         ghost predicate WF() 
@@ -28,7 +25,6 @@ module DistributedSystem {
     datatype Variables = Variables(
         client: ClientHost.Variables,
         server: ServerHost.Variables,
-        loadBalancer: LoadBalancerHost.Variables,
         network: Network.Variables) 
     {
         ghost predicate WF(c: Constants) {
@@ -40,7 +36,6 @@ module DistributedSystem {
         && v.WF(c)
         && ClientHost.Init(c.client, v.client)
         && ServerHost.Init(c.server, v.server)
-        && LoadBalancerHost.Init(c.loadBalancer, v.loadBalancer)
         && Network.Init(c.network, v.network)
     }
 
@@ -50,7 +45,6 @@ module DistributedSystem {
         && v'.WF(c)
         && ClientHost.Next(c.client, v.client, v'.client, evt, msgOps)
         && ServerHost.Next(c.server, v.server, v'.server, evt, msgOps)
-        && LoadBalancerHost.Next(c.loadBalancer, v.loadBalancer, v'.loadBalancer, evt, msgOps)
         && Network.Next(c.network, v.network, v'.network, msgOps)
     }
 
@@ -75,19 +69,18 @@ module DistributedSystem {
     ensures behavior[|behavior|-1].WF(c)
     ensures behavior[|behavior|-1].client.resp == Some(c.client.x + c.client.y)
   {
+/*{*/
     behavior := [Variables(
         ClientHost.Variables(false, None),
         ServerHost.Variables(None),
-        LoadBalancerHost.Variables(false, false),
         Network.Variables({})
     )];
 
-    var sent := ClientRequest(c.client.x, c.client.y);
+    var sent := Request(c.client.x, c.client.y);
     var msgOps := MessageOps(None, Some(sent));
     behavior := behavior + [Variables(
         ClientHost.Variables(true, None),
         ServerHost.Variables(None),
-        LoadBalancerHost.Variables(false, false),
         Network.Variables({ sent })
     )];
     assert ClientHost.SendRequest(c.client, behavior[0].client, behavior[1].client, NoOp, msgOps);
@@ -95,55 +88,27 @@ module DistributedSystem {
     assert Next(c, behavior[0], behavior[1], NoOp);
 
     var recv := sent;
-    var sent2 := LBRequest(recv.x, recv.y);
+    var sum := sent.x + sent.y;
+    var sent2 := Response(sum);
     msgOps := MessageOps(Some(recv), Some(sent2));
     behavior := behavior + [Variables(
         ClientHost.Variables(true, None),
-        ServerHost.Variables(None),
-        LoadBalancerHost.Variables(true, false),
+        ServerHost.Variables(Some(sent2.sum)),
         Network.Variables({ sent, sent2 })
     )];
-    assert LoadBalancerHost.ForwardRequest(c.loadBalancer, behavior[1].loadBalancer, behavior[2].loadBalancer, NoOp, msgOps);
-    assert NextStep(c, behavior[1], behavior[2], NoOp, HostActionStep(msgOps));
-    assert Next(c, behavior[1], behavior[2], NoOp);
+    assert ServerHost.Compute(c.server, behavior[1].server, behavior[2].server, Compute, msgOps);
+    assert NextStep(c, behavior[1], behavior[2], Compute, HostActionStep(msgOps));
+    assert Next(c, behavior[1], behavior[2], Compute);
 
     var recv2 := sent2;
-    var sum := sent.x + sent.y;
-    var sent3 := LBResponse(sum);
-    msgOps := MessageOps(Some(recv2), Some(sent3));
+    msgOps := MessageOps(Some(recv2), None);
     behavior := behavior + [Variables(
-        ClientHost.Variables(true, None),
+        ClientHost.Variables(true, Some(recv2.sum)),
         ServerHost.Variables(Some(sum)),
-        LoadBalancerHost.Variables(true, false),
-        Network.Variables({ sent, sent2, sent3 })
+        Network.Variables({ sent, sent2 })
     )];
-    assert ServerHost.Compute(c.server, behavior[2].server, behavior[3].server, Compute, msgOps);
-    assert NextStep(c, behavior[2], behavior[3], Compute, HostActionStep(msgOps));
-    assert Next(c, behavior[2], behavior[3], Compute);
-
-    var recv3 := sent3;
-    var sent4 := ClientResponse(recv3.sum);
-    msgOps := MessageOps(Some(recv3), Some(sent4));
-    behavior := behavior + [Variables(
-        ClientHost.Variables(true, None),
-        ServerHost.Variables(Some(sum)),
-        LoadBalancerHost.Variables(true, true),
-        Network.Variables({ sent, sent2, sent3, sent4 })
-    )];
-    assert LoadBalancerHost.ForwardResponse(c.loadBalancer, behavior[3].loadBalancer, behavior[4].loadBalancer, NoOp, msgOps);
-    assert NextStep(c, behavior[3], behavior[4], NoOp, HostActionStep(msgOps));
-    assert Next(c, behavior[3], behavior[4], NoOp);
-
-    var recv4 := sent4;
-    msgOps := MessageOps(Some(recv4), None);
-    behavior := behavior + [Variables(
-        ClientHost.Variables(true, Some(recv4.sum)),
-        ServerHost.Variables(Some(sum)),
-        LoadBalancerHost.Variables(true, true),
-        Network.Variables({ sent, sent2, sent3, sent4 })
-    )];
-    assert ClientHost.ReceiveResponse(c.client, behavior[4].client, behavior[5].client, NoOp, msgOps);
-    assert NextStep(c, behavior[4], behavior[5], NoOp, HostActionStep(msgOps));
-    assert Next(c, behavior[4], behavior[5], NoOp);
+    assert ClientHost.ReceiveResponse(c.client, behavior[2].client, behavior[3].client, NoOp, msgOps);
+    assert NextStep(c, behavior[2], behavior[3], NoOp, HostActionStep(msgOps));
+    assert Next(c, behavior[2], behavior[3], NoOp);
   }
 }
