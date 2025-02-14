@@ -81,96 +81,50 @@ tokenized_state_machine! {
     StatelessSvcSM<S: StatelessSvc> {
         fields {
             #[sharding(multiset)]
-            pub received: Multiset<ClientSM::sent<S>>,
-
-            #[sharding(multiset)]
-            pub sent: Multiset<(ClientSM::sent<S>, SvcResponse<S::ResponseContents>)>,
+            pub computed: Multiset<(ClientSM::sent<S>, SvcResponse<S::ResponseContents>)>,
         }
 
         init! {
             initialize() {
-                init received = Multiset::<ClientSM::sent<S>>::empty();
-                init sent = Multiset::<(ClientSM::sent<S>, SvcResponse<S::ResponseContents>)>::empty();
+                init computed = Multiset::<(ClientSM::sent<S>, SvcResponse<S::ResponseContents>)>::empty();
             }
         }
 
         transition! {
-            recv(req: ClientSM::sent<S>) {
-                require(S::pre(req@.key.req));
-
-                add received += { req };
-            }
-        }
-
-        transition! {
-            send(req: ClientSM::sent<S>, resp: SvcResponse<S::ResponseContents>) {
-                have received >= { req };
+            compute(req: ClientSM::sent<S>, resp: SvcResponse<S::ResponseContents>) {
                 require process::<S>(req@.key, resp);
 
-                add sent += { (req, resp) };
+                add computed += { (req, resp) };
             }
         }
 
         property! {
-            received_inv(req: ClientSM::sent<S>) {
-                have received >= { req };
-
-                assert S::pre(req@.key.req) by {
-                    assert(pre.received.contains(req));
-                };
-            }
-        }
-
-        property! {
-            sent_inv(pair: (ClientSM::sent<S>, SvcResponse<S::ResponseContents>)) {
-                have sent >= { pair };
+            computed_inv(pair: (ClientSM::sent<S>, SvcResponse<S::ResponseContents>)) {
+                have computed >= { pair };
 
                 assert process::<S>(pair.0@.key, pair.1) by {
-                    assert(pre.sent.contains(pair));
+                    assert(pre.computed.contains(pair));
                 };
             }
         }
 
         #[invariant]
-        pub open spec fn received_inv(&self) -> bool {
-            forall |req: ClientSM::sent<S>| #[trigger] self.received.contains(req) ==> S::pre(req@.key.req)
-        }
-
-        #[invariant]
-        pub open spec fn sent_inv(&self) -> bool {
-            forall |pair: (ClientSM::sent<S>, SvcResponse<S::ResponseContents>)| #[trigger] self.sent.contains(pair) ==> 
-            self.received.contains(pair.0) && process::<S>(pair.0@.key, pair.1)
+        pub open spec fn computed_inv(&self) -> bool {
+            forall |pair: (ClientSM::sent<S>, SvcResponse<S::ResponseContents>)| #[trigger] self.computed.contains(pair) ==> 
+            process::<S>(pair.0@.key, pair.1)
         }
 
         #[inductive(initialize)]
         fn initialize_inductive(post: Self) { }
-
-        #[inductive(recv)]
-        fn recv_inductive(pre: Self, post: Self, req: ClientSM::sent<S>) { 
-            assert forall |req1: ClientSM::sent<S>| #[trigger] post.received.contains(req1) implies S::pre(req1@.key.req)
-            by {
-                if (req == req1) {
-                } else {
-                    assert(pre.received.contains(req1));
-                }
-            }
-
-            assert forall |pair: (ClientSM::sent<S>, SvcResponse<S::ResponseContents>)| #[trigger] post.sent.contains(pair) implies 
-            #[trigger] post.received.contains(pair.0) && process::<S>(pair.0@.key, pair.1)
-            by {
-                assert(pre.sent.contains(pair));
-            }
-        }
        
-        #[inductive(send)]
-        fn send_inductive(pre: Self, post: Self, req: ClientSM::sent<S>, resp: SvcResponse<S::ResponseContents>) { 
-            assert forall |pair: (ClientSM::sent<S>, SvcResponse<S::ResponseContents>)| #[trigger] post.sent.contains(pair) implies 
-            #[trigger] post.received.contains(pair.0) && process::<S>(pair.0@.key, pair.1)
+        #[inductive(compute)]
+        fn compute_inductive(pre: Self, post: Self, req: ClientSM::sent<S>, resp: SvcResponse<S::ResponseContents>) { 
+            assert forall |pair: (ClientSM::sent<S>, SvcResponse<S::ResponseContents>)| #[trigger] post.computed.contains(pair) implies 
+            process::<S>(pair.0@.key, pair.1)
             by {
                 if (req == pair.0 && resp == pair.1) {
-                    assert(pre.received.contains(pair.0));
                 } else {
-                    assert(pre.sent.contains(pair));
+                    assert(pre.computed.contains(pair));
                 }
             }
         }
