@@ -1,7 +1,7 @@
 module Types {
     datatype Option<T> = Some(value:T) | None
 
-    datatype Event = Compute | NoOp
+    datatype Event = SendRequest | ReceiveResponse | NoOp
 
     datatype Message =
     | ClientRequest(x: int, y: int)
@@ -15,22 +15,32 @@ module Types {
 module Spec {
     import opened Types
 
-    datatype Constants = Constants(x: int, y: int)
+    datatype Constants = Constants
 
-    datatype Variables = Variables(sum: Option<int>)
+    datatype Variables = Variables(nums: Option<(int, int)>, sum: Option<int>)
 
     ghost predicate Init(c: Constants, v: Variables) {
-        v.sum.None?
+        && v.nums.None?
+        && v.sum.None?
     }
 
-    ghost predicate Compute(c: Constants, v: Variables, v': Variables) {
+    ghost predicate SendRequest(c: Constants, v: Variables, v': Variables) {
+        && v.nums.None?
+        && v'.nums.Some?
+        && v.sum == v'.sum
+    }
+
+    ghost predicate ReceiveResponse(c: Constants, v: Variables, v': Variables) {
+        && v.nums == v'.nums
+        && v.nums.Some?
         && v.sum.None?
-        && v'.sum == Some(c.x + c.y)
+        && v'.sum == Some(v.nums.value.0 + v.nums.value.1)
     }
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Event) {
         match evt {
-            case Compute => Compute(c, v, v')
+            case SendRequest => SendRequest(c, v, v')
+            case ReceiveResponse => ReceiveResponse(c, v, v')
             case NoOp => v == v'
         }
     }

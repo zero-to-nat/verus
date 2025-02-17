@@ -21,7 +21,7 @@ module ServerHost {
     }
 
     ghost predicate Compute(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
-        && evt.Compute?
+        && evt.NoOp?
         && msgOps.recv.Some?
         && msgOps.recv.value.LBRequest?
         && msgOps.send == Some(LBResponse(msgOps.recv.value.x + msgOps.recv.value.y))

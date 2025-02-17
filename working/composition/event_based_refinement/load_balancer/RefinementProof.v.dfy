@@ -7,7 +7,6 @@ include "LoadBalancer.v.dfy"
 include "Host.v.dfy"
 include "DistributedSystem.v.dfy"
 
-
 module RefinementProof refines RefinementTheorem {
     import ClientHost
     import ServerHost
@@ -18,23 +17,22 @@ module RefinementProof refines RefinementTheorem {
     ghost function ConstantsAbstraction(c: DistributedSystem.Constants) : Spec.Constants
 //        requires c.WF()
     {
-        Spec.Constants(c.hosts[0].client.x, c.hosts[0].client.y)
+        Spec.Constants()
     }
 
     ghost function VariablesAbstraction(c: DistributedSystem.Constants, v: DistributedSystem.Variables) : Spec.Variables
 //        requires v.WF(c)
     {
-        Spec.Variables(v.hosts[1].server.sum)
+        Spec.Variables(v.hosts[0].client.req, v.hosts[0].client.resp)
     }
 
     ghost predicate Inv(c: DistributedSystem.Constants, v: DistributedSystem.Variables)
     {
         && v.WF(c)
-        && (v.hosts[1].server.sum.Some? ==> v.hosts[1].server.sum.value == c.hosts[0].client.x + c.hosts[0].client.y)
-        && (forall msg :: msg in v.network.sentMsgs && msg.ClientRequest? ==> msg == ClientRequest(c.hosts[0].client.x, c.hosts[0].client.y))
-        && (forall msg :: msg in v.network.sentMsgs && msg.LBRequest? ==> msg == LBRequest(c.hosts[0].client.x, c.hosts[0].client.y))
-        && (forall msg :: msg in v.network.sentMsgs && msg.LBResponse? ==> msg == LBResponse(c.hosts[0].client.x + c.hosts[0].client.y))
-        && (forall msg :: msg in v.network.sentMsgs && msg.ClientResponse? ==> msg == ClientResponse(c.hosts[0].client.x + c.hosts[0].client.y))
+        && (forall msg :: msg in v.network.sentMsgs && msg.ClientRequest? ==> v.hosts[0].client.req.Some? && msg == ClientRequest(v.hosts[0].client.req.value.0, v.hosts[0].client.req.value.1))
+        && (forall msg :: msg in v.network.sentMsgs && msg.LBRequest? ==> v.hosts[0].client.req.Some? && msg == LBRequest(v.hosts[0].client.req.value.0, v.hosts[0].client.req.value.1))
+        && (forall msg :: msg in v.network.sentMsgs && msg.LBResponse? ==> v.hosts[0].client.req.Some? && msg == LBResponse(v.hosts[0].client.req.value.0 + v.hosts[0].client.req.value.1))
+        && (forall msg :: msg in v.network.sentMsgs && msg.ClientResponse? ==> v.hosts[0].client.req.Some? && msg == ClientResponse(v.hosts[0].client.req.value.0 + v.hosts[0].client.req.value.1))
     }
 
     lemma RefinementInit(c: DistributedSystem.Constants, v: DistributedSystem.Variables)
