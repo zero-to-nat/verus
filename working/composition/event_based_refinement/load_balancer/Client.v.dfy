@@ -1,11 +1,21 @@
-include "AdditionServiceSpec.dfy"
+include "AdditionServiceSpec.t.dfy"
 
 module ClientHost {
     import opened Types
 
     datatype Constants = Constants(x: int, y: int)
+    {
+        ghost predicate WF() {
+            true
+        }
+    }
 
     datatype Variables = Variables(sentRequest: bool, resp: Option<int>)
+    {
+        ghost predicate WF(c: Constants) {
+            true
+        }
+    }
 
     ghost predicate Init(c: Constants, v: Variables) {
         && !v.sentRequest
@@ -13,6 +23,7 @@ module ClientHost {
     }
 
     ghost predicate SendRequest(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
+        && evt.NoOp?
         && v.resp == v'.resp
         && !v.sentRequest
         && v'.sentRequest
@@ -21,6 +32,7 @@ module ClientHost {
     }
 
     ghost predicate ReceiveResponse(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
+        && evt.NoOp?
         && v.sentRequest == v'.sentRequest
         && msgOps.recv.Some?
         && msgOps.recv.value.ClientResponse?
@@ -31,12 +43,7 @@ module ClientHost {
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps)
     {
-        match evt {
-            case Compute => v == v'
-            case NoOp => 
-            SendRequest(c, v, v', evt, msgOps) 
-            || ReceiveResponse(c, v, v', evt, msgOps) 
-            || ((msgOps.send.None? || !msgOps.send.value.ClientRequest?) && (msgOps.recv.None? || !msgOps.recv.value.ClientResponse?) && v == v')
-        }
+        || SendRequest(c, v, v', evt, msgOps) 
+        || ReceiveResponse(c, v, v', evt, msgOps) 
     }
 }

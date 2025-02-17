@@ -1,11 +1,21 @@
-include "AdditionServiceSpec.dfy"
+include "AdditionServiceSpec.t.dfy"
 
 module LoadBalancerHost {
     import opened Types
 
     datatype Constants = Constants()
+    {
+        ghost predicate WF() {
+            true
+        }
+    }
 
-    datatype Variables = Variables(receivedRequest: bool, receivedResponse: bool)
+    datatype Variables = Variables(receivedRequest: bool, receivedResponse: bool) 
+    {
+        ghost predicate WF(c: Constants) {
+            true
+        }
+    }
 
     ghost predicate Init(c: Constants, v: Variables) {
         && !v.receivedRequest
@@ -13,6 +23,7 @@ module LoadBalancerHost {
     }
 
     ghost predicate ForwardRequest(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
+        && evt.NoOp?
         && !v.receivedRequest
         && v'.receivedRequest
         && v.receivedResponse == v'.receivedResponse
@@ -22,6 +33,7 @@ module LoadBalancerHost {
     }
 
     ghost predicate ForwardResponse(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
+        && evt.NoOp?
         && !v.receivedResponse
         && v'.receivedResponse
         && v.receivedRequest == v'.receivedRequest
@@ -32,14 +44,7 @@ module LoadBalancerHost {
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps)
     {
-        match evt {
-            case Compute => v == v'
-            case NoOp => 
-            ForwardRequest(c, v, v', evt, msgOps) 
-            || ForwardResponse(c, v, v', evt, msgOps) 
-            || (&& ((msgOps.send.None? || !msgOps.send.value.LBRequest?) && (msgOps.recv.None? || !msgOps.recv.value.ClientRequest?))
-                && ((msgOps.send.None? || !msgOps.send.value.ClientResponse?) && (msgOps.recv.None? || !msgOps.recv.value.LBResponse?))
-                && v == v')
-        }
+        || ForwardRequest(c, v, v', evt, msgOps) 
+        || ForwardResponse(c, v, v', evt, msgOps) 
     }
 }

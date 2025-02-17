@@ -1,17 +1,27 @@
-include "AdditionServiceSpec.dfy"
+include "AdditionServiceSpec.t.dfy"
 
 module ServerHost {
     import opened Types
 
-    datatype Constants = Constants()
+    datatype Constants = Constants() {
+        ghost predicate WF() {
+            true
+        }
+    }
 
     datatype Variables = Variables(sum: Option<int>)
+    {
+        ghost predicate WF(c: Constants) {
+            true
+        }
+    }
 
     ghost predicate Init(c: Constants, v: Variables) {
         && v.sum.None?
     }
 
     ghost predicate Compute(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
+        && evt.Compute?
         && msgOps.recv.Some?
         && msgOps.recv.value.LBRequest?
         && msgOps.send == Some(LBResponse(msgOps.recv.value.x + msgOps.recv.value.y))
@@ -21,9 +31,6 @@ module ServerHost {
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps)
     {
-        match evt {
-            case Compute => Compute(c, v, v', evt, msgOps)
-            case NoOp => v == v' && (msgOps.send.None? || !msgOps.send.value.LBResponse?)
-        }
+        Compute(c, v, v', evt, msgOps)
     }
 }

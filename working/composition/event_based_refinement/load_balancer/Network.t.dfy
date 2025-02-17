@@ -1,4 +1,4 @@
-include "AdditionServiceSpec.dfy"
+include "AdditionServiceSpec.t.dfy"
 
 // copied from chapter 5 exercise 1
 module Network {
