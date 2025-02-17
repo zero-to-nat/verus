@@ -16,25 +16,26 @@ module DistributedSystem refines AbstractDistributedSystem {
         ensures Init(c, behavior[0])
         ensures forall i:nat | i < |behavior|-1 :: (Next(c, behavior[i], behavior[i+1], NoOp) || Next(c, behavior[i], behavior[i+1], SendRequest) || Next(c, behavior[i], behavior[i+1], ReceiveResponse))
         ensures behavior[|behavior|-1].WF(c)
-        ensures behavior[|behavior|-1].hosts[0].client.req.Some?
-        ensures behavior[|behavior|-1].hosts[0].client.resp == Some(behavior[|behavior|-1].hosts[0].client.req.value.0 + behavior[|behavior|-1].hosts[0].client.req.value.1)
+        ensures |behavior[|behavior|-1].hosts[0].client.requests| == |behavior[|behavior|-1].hosts[0].client.responses| == 1
+        ensures behavior[|behavior|-1].hosts[0].client.responses[0].sum == behavior[|behavior|-1].hosts[0].client.requests[0].x + behavior[|behavior|-1].hosts[0].client.requests[0].y
     {
         behavior := [Variables(
             [
-                Host.ClientVariables(ClientHost.Variables(None, None)),
-                Host.ServerVariables(ServerHost.Variables(None)),
-                Host.LoadBalancerVariables(LoadBalancerHost.Variables(false, false))
+                Host.ClientVariables(ClientHost.Variables([], [])),
+                Host.ServerVariables(ServerHost.Variables({})),
+                Host.LoadBalancerVariables(LoadBalancerHost.Variables({}, {}))
             ],
             Network.Variables({})
         )];
 
-        var sent := ClientRequest(1, 2);
+        var clientReq := ClientRequest(0, 4, 5);
+        var sent := ClientRequestMsg(clientReq);
         var msgOps := MessageOps(None, Some(sent));
         behavior := behavior + [Variables(
             [
-                Host.ClientVariables(ClientHost.Variables(Some((1,2)), None)),
-                Host.ServerVariables(ServerHost.Variables(None)),
-                Host.LoadBalancerVariables(LoadBalancerHost.Variables(false, false))
+                Host.ClientVariables(ClientHost.Variables([clientReq], [])),
+                Host.ServerVariables(ServerHost.Variables({})),
+                Host.LoadBalancerVariables(LoadBalancerHost.Variables({}, {}))
             ],
             Network.Variables({ sent })
         )];
@@ -43,13 +44,13 @@ module DistributedSystem refines AbstractDistributedSystem {
         assert Next(c, behavior[0], behavior[1], SendRequest);
 
         var recv := sent;
-        var sent2 := LBRequest(recv.x, recv.y);
+        var sent2 := LBRequestMsg(recv.request);
         msgOps := MessageOps(Some(recv), Some(sent2));
         behavior := behavior + [Variables(
             [
-                Host.ClientVariables(ClientHost.Variables(Some((1,2)), None)),
-                Host.ServerVariables(ServerHost.Variables(None)),
-                Host.LoadBalancerVariables(LoadBalancerHost.Variables(true, false))
+                Host.ClientVariables(ClientHost.Variables([clientReq], [])),
+                Host.ServerVariables(ServerHost.Variables({})),
+                Host.LoadBalancerVariables(LoadBalancerHost.Variables({0}, {}))
             ],
             Network.Variables({ sent, sent2 })
         )];
@@ -58,14 +59,15 @@ module DistributedSystem refines AbstractDistributedSystem {
         assert Next(c, behavior[1], behavior[2], NoOp);
 
         var recv2 := sent2;
-        var sum := sent.x + sent.y;
-        var sent3 := LBResponse(sum);
+        var sum := recv2.request.x + recv2.request.y;
+        var clientResp := ClientResponse(0, sum);
+        var sent3 := LBResponseMsg(clientResp);
         msgOps := MessageOps(Some(recv2), Some(sent3));
         behavior := behavior + [Variables(
             [
-                Host.ClientVariables(ClientHost.Variables(Some((1,2)), None)),
-                Host.ServerVariables(ServerHost.Variables(Some(sum))),
-                Host.LoadBalancerVariables(LoadBalancerHost.Variables(true, false))
+                Host.ClientVariables(ClientHost.Variables([clientReq], [])),
+                Host.ServerVariables(ServerHost.Variables({0})),
+                Host.LoadBalancerVariables(LoadBalancerHost.Variables({0}, {}))
             ],
             Network.Variables({ sent, sent2, sent3 })
         )];
@@ -74,13 +76,13 @@ module DistributedSystem refines AbstractDistributedSystem {
         assert Next(c, behavior[2], behavior[3], NoOp);
 
         var recv3 := sent3;
-        var sent4 := ClientResponse(recv3.sum);
+        var sent4 := ClientResponseMsg(recv3.response);
         msgOps := MessageOps(Some(recv3), Some(sent4));
         behavior := behavior + [Variables(
             [
-                Host.ClientVariables(ClientHost.Variables(Some((1,2)), None)),
-                Host.ServerVariables(ServerHost.Variables(Some(sum))),
-                Host.LoadBalancerVariables(LoadBalancerHost.Variables(true, true))
+                Host.ClientVariables(ClientHost.Variables([clientReq], [])),
+                Host.ServerVariables(ServerHost.Variables({0})),
+                Host.LoadBalancerVariables(LoadBalancerHost.Variables({0}, {0}))
             ],
             Network.Variables({ sent, sent2, sent3, sent4 })
         )];
@@ -92,9 +94,9 @@ module DistributedSystem refines AbstractDistributedSystem {
         msgOps := MessageOps(Some(recv4), None);
         behavior := behavior + [Variables(
             [
-                Host.ClientVariables(ClientHost.Variables(Some((1,2)), Some(recv4.sum))),
-                Host.ServerVariables(ServerHost.Variables(Some(sum))),
-                Host.LoadBalancerVariables(LoadBalancerHost.Variables(true, true))
+                Host.ClientVariables(ClientHost.Variables([clientReq], [clientResp])),
+                Host.ServerVariables(ServerHost.Variables({0})),
+                Host.LoadBalancerVariables(LoadBalancerHost.Variables({0}, {0}))
             ],
             Network.Variables({ sent, sent2, sent3, sent4 })
         )];

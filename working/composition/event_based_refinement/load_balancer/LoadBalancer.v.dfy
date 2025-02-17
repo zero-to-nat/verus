@@ -10,7 +10,7 @@ module LoadBalancerHost {
         }
     }
 
-    datatype Variables = Variables(receivedRequest: bool, receivedResponse: bool) 
+    datatype Variables = Variables(forwardedRequests: set<SeqNo>, forwardedResponses: set<SeqNo>) 
     {
         ghost predicate WF(c: Constants) {
             true
@@ -18,28 +18,28 @@ module LoadBalancerHost {
     }
 
     ghost predicate Init(c: Constants, v: Variables) {
-        && !v.receivedRequest
-        && !v.receivedResponse
+        && |v.forwardedRequests| == 0
+        && |v.forwardedResponses| == 0
     }
 
     ghost predicate ForwardRequest(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
         && evt.NoOp?
-        && !v.receivedRequest
-        && v'.receivedRequest
-        && v.receivedResponse == v'.receivedResponse
         && msgOps.recv.Some?
-        && msgOps.recv.value.ClientRequest?
-        && msgOps.send == Some(LBRequest(msgOps.recv.value.x, msgOps.recv.value.y))
+        && msgOps.recv.value.ClientRequestMsg?
+        && msgOps.recv.value.request.seqNo !in v.forwardedRequests
+        && v'.forwardedRequests == v.forwardedRequests + { msgOps.recv.value.request.seqNo }
+        && v'.forwardedResponses == v.forwardedResponses
+        && msgOps.send == Some(LBRequestMsg(msgOps.recv.value.request))
     }
 
     ghost predicate ForwardResponse(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
         && evt.NoOp?
-        && !v.receivedResponse
-        && v'.receivedResponse
-        && v.receivedRequest == v'.receivedRequest
         && msgOps.recv.Some?
-        && msgOps.recv.value.LBResponse?
-        && msgOps.send == Some(ClientResponse(msgOps.recv.value.sum))
+        && msgOps.recv.value.LBResponseMsg?
+        && msgOps.recv.value.response.seqNo !in v.forwardedResponses
+        && v'.forwardedResponses == v.forwardedResponses + { msgOps.recv.value.response.seqNo }
+        && v'.forwardedRequests == v.forwardedRequests
+        && msgOps.send == Some(ClientResponseMsg(msgOps.recv.value.response))
     }
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps)

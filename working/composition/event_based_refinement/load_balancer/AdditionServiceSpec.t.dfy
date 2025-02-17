@@ -3,11 +3,16 @@ module Types {
 
     datatype Event = SendRequest | ReceiveResponse | NoOp
 
+    type SeqNo = nat
+
+    datatype ClientRequest = ClientRequest(seqNo: SeqNo, x: int, y: int)
+    datatype ClientResponse = ClientResponse(seqNo: SeqNo, sum: int)
+
     datatype Message =
-    | ClientRequest(x: int, y: int)
-    | LBRequest(x: int, y: int)
-    | LBResponse(sum: int)
-    | ClientResponse(sum: int)
+    | ClientRequestMsg(request: ClientRequest)
+    | LBRequestMsg(request: ClientRequest)
+    | LBResponseMsg(response: ClientResponse)
+    | ClientResponseMsg(response: ClientResponse)
 
     datatype MessageOps = MessageOps(recv:Option<Message>, send:Option<Message>)
 }
@@ -17,24 +22,23 @@ module Spec {
 
     datatype Constants = Constants
 
-    datatype Variables = Variables(nums: Option<(int, int)>, sum: Option<int>)
+    datatype Variables = Variables(nums: seq<(int, int)>, sum: seq<int>)
 
     ghost predicate Init(c: Constants, v: Variables) {
-        && v.nums.None?
-        && v.sum.None?
+        && |v.nums| == 0
+        && |v.sum| == 0
     }
 
     ghost predicate SendRequest(c: Constants, v: Variables, v': Variables) {
-        && v.nums.None?
-        && v'.nums.Some?
+        && |v'.nums| == |v.nums| + 1
         && v.sum == v'.sum
     }
 
     ghost predicate ReceiveResponse(c: Constants, v: Variables, v': Variables) {
         && v.nums == v'.nums
-        && v.nums.Some?
-        && v.sum.None?
-        && v'.sum == Some(v.nums.value.0 + v.nums.value.1)
+        && |v.sum| < |v.nums|
+        && |v'.sum| == |v.sum| + 1
+        && v'.sum[|v'.sum| - 1] == v.nums[|v'.sum| - 1].0 + v.nums[|v'.sum| - 1].1
     }
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Event) {

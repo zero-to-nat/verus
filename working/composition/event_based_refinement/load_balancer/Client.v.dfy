@@ -10,35 +10,42 @@ module ClientHost {
         }
     }
 
-    datatype Variables = Variables(req: Option<(int, int)>, resp: Option<int>)
+    datatype Variables = Variables(requests: seq<ClientRequest>, responses: seq<ClientResponse>)
     {
         ghost predicate WF(c: Constants) {
-            true
+            && |requests| >= |responses|
+            && (forall i :: 0 <= i < |requests| ==> requests[i].seqNo == i)
+            && (forall i :: 0 <= i < |responses| ==> responses[i].seqNo == i)
         }
     }
 
     ghost predicate Init(c: Constants, v: Variables) {
-        && v.req.None?
-        && v.resp.None?
+        && |v.requests| == 0
+        && |v.responses| == 0
     }
 
     ghost predicate SendRequest(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
+        && v.WF(c)
+        && v'.WF(c)
         && evt.SendRequest?
-        && v.resp == v'.resp
-        && v.req.None?
-        && v'.req.Some?
+        && v.responses == v'.responses
+        && |v'.requests| == |v.requests| + 1
+        && v'.requests[..|v'.requests| - 1] == v.requests
         && msgOps.recv.None?
-        && msgOps.send == Some(ClientRequest(v'.req.value.0, v'.req.value.1))
+        && msgOps.send == Some(ClientRequestMsg(v'.requests[|v'.requests| - 1]))
     }
 
     ghost predicate ReceiveResponse(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps) {
+        && v.WF(c)
+        && v'.WF(c)
         && evt.ReceiveResponse?
-        && v.req == v'.req
+        && v.requests == v'.requests
         && msgOps.recv.Some?
-        && msgOps.recv.value.ClientResponse?
+        && msgOps.recv.value.ClientResponseMsg?
         && msgOps.send.None?
-        && v.resp.None?
-        && v'.resp == Some(msgOps.recv.value.sum)
+        && |v'.responses| == |v.responses| + 1
+        && v'.responses[..|v'.responses| - 1] == v.responses 
+        && v'.responses[|v'.responses| - 1] == msgOps.recv.value.response
     }
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Event, msgOps: MessageOps)
