@@ -1,24 +1,9 @@
-module Types {
-    datatype Option<T> = Some(value:T) | None
+include "../shared/Spec.t.dfy"
 
-    datatype Event = SendRequest | ReceiveResponse | NoOp
+module ClientSpec refines AbstractSpec {
+    datatype Event = SendRequest | ReceiveResponse
 
-    type SeqNo = nat
-
-    datatype ClientRequest = ClientRequest(seqNo: SeqNo, x: int, y: int)
-    datatype ClientResponse = ClientResponse(seqNo: SeqNo, sum: int)
-
-    datatype Message =
-    | ClientRequestMsg(request: ClientRequest)
-    | LBRequestMsg(request: ClientRequest)
-    | LBResponseMsg(response: ClientResponse)
-    | ClientResponseMsg(response: ClientResponse)
-
-    datatype MessageOps = MessageOps(recv:Option<Message>, send:Option<Message>)
-}
-
-module Spec {
-    import opened Types
+    // todo - do we need to keep NoOp?
 
     datatype Constants = Constants
 
@@ -31,6 +16,7 @@ module Spec {
 
     ghost predicate SendRequest(c: Constants, v: Variables, v': Variables) {
         && |v'.nums| == |v.nums| + 1
+        && v'.nums[..|v'.nums| - 1] == v.nums
         && v.sum == v'.sum
     }
 
@@ -38,6 +24,7 @@ module Spec {
         && v.nums == v'.nums
         && |v.sum| < |v.nums|
         && |v'.sum| == |v.sum| + 1
+        && v'.sum[..|v'.sum| - 1] == v.sum
         && v'.sum[|v'.sum| - 1] == v.nums[|v'.sum| - 1].0 + v.nums[|v'.sum| - 1].1
     }
 
@@ -45,7 +32,6 @@ module Spec {
         match evt {
             case SendRequest => SendRequest(c, v, v')
             case ReceiveResponse => ReceiveResponse(c, v, v')
-            case NoOp => v == v'
         }
     }
 }

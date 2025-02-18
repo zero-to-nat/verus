@@ -1,8 +1,11 @@
-include "AdditionServiceSpec.dfy"
+include "Types.t.dfy"
 
 // copied from chapter 5 exercise 1
-module Network {
+abstract module AbstractNetwork {
   import opened Types
+
+  type Message(==)
+  datatype MessageOps = MessageOps(recv:Option<Message>, send:Option<Message>)
 
   datatype Constants = Constants  // no constants for network
 
