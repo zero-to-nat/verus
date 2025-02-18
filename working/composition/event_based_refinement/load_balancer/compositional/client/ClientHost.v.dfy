@@ -1,10 +1,10 @@
 include "ClientSpec.t.dfy"
-include "Network.v.dfy"
 include "../shared/Host.t.dfy"
 
 module ClientHost refines AbstractHost {
     import opened Spec = ClientSpec
-    import Network = ClientNetwork
+
+    datatype Message = ClientRequest(request: ServiceRequest<(int, int)>) | ClientResponse(response: ServiceResponse<int>)
 
     datatype Constants = Constants
     {
@@ -39,7 +39,7 @@ module ClientHost refines AbstractHost {
         && |v.responses| == 0
     }
 
-    ghost predicate SendRequest(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: Network.MessageOps) {
+    ghost predicate SendRequest(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps) {
         && v.WF(c)
         && v'.WF(c)
         && evt.Some? && evt.value.SendRequest?
@@ -52,7 +52,7 @@ module ClientHost refines AbstractHost {
         && msgOps.send.value.request == v'.requests[|v'.requests| - 1]
     }
 
-    ghost predicate ReceiveResponse(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: Network.MessageOps) {
+    ghost predicate ReceiveResponse(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps) {
         && v.WF(c)
         && v'.WF(c)
         && evt.Some? && evt.value.ReceiveResponse?
@@ -65,7 +65,7 @@ module ClientHost refines AbstractHost {
         && v'.responses[|v'.responses| - 1] == msgOps.recv.value.response
     }
 
-    ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: Network.MessageOps)
+    ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps)
     {
         || SendRequest(c, v, v', evt, msgOps) 
         || ReceiveResponse(c, v, v', evt, msgOps) 

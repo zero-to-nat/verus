@@ -1,11 +1,10 @@
 include "Types.t.dfy"
+include "Host.t.dfy"
 
 // copied from chapter 5 exercise 1
 abstract module AbstractNetwork {
   import opened Types
-
-  type Message(==)
-  datatype MessageOps = MessageOps(recv:Option<Message>, send:Option<Message>)
+  import opened Host : AbstractHost
 
   datatype Constants = Constants  // no constants for network
 
@@ -20,7 +19,7 @@ abstract module AbstractNetwork {
     && v.sentMsgs == {}
   }
 
-  ghost predicate Next(c: Constants, v: Variables, v': Variables, msgOps: MessageOps)
+  ghost predicate Next(c: Constants, v: Variables, v': Variables, msgOps: Host.MessageOps)
   {
     // Only allow receipt of a message if we've seen it has been sent.
     && (msgOps.recv.Some? ==> msgOps.recv.value in v.sentMsgs)

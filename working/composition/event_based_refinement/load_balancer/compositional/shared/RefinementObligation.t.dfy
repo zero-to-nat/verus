@@ -6,22 +6,22 @@ abstract module RefinementTheorem {
     import opened Types
     import opened DistributedSystem: AbstractDistributedSystem
 
-    ghost function ConstantsAbstraction(c: DistributedSystem.Constants) : Host.Spec.Constants
+    ghost function ConstantsAbstraction(c: Constants) : Network.Host.Spec.Constants
         requires c.WF()
 
-    ghost function VariablesAbstraction(c: DistributedSystem.Constants, v: DistributedSystem.Variables) : Host.Spec.Variables
+    ghost function VariablesAbstraction(c: Constants, v: Variables) : Network.Host.Spec.Variables
         requires v.WF(c)
 
-    ghost predicate Inv(c: DistributedSystem.Constants, v: DistributedSystem.Variables)
+    ghost predicate Inv(c: Constants, v: Variables)
 
-    lemma RefinementInit(c: DistributedSystem.Constants, v: DistributedSystem.Variables)
-        requires DistributedSystem.Init(c, v)
+    lemma RefinementInit(c: Constants, v: Variables)
+        requires Init(c, v)
         ensures Inv(c, v)
-        ensures Host.Spec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
+        ensures Network.Host.Spec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
     
-    lemma RefinementNext(c: DistributedSystem.Constants, v: DistributedSystem.Variables, v': DistributedSystem.Variables, evt: Option<Host.Spec.Event>, step: DistributedSystem.Step)
-        requires DistributedSystem.NextStep(c, v, v', evt, step)
+    lemma RefinementNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>, step: Step)
+        requires NextStep(c, v, v', evt, step)
         requires Inv(c, v)
         ensures Inv(c, v') 
-        ensures (evt.Some? && Host.Spec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), evt.value)) || (evt.None? && VariablesAbstraction(c, v) == VariablesAbstraction(c, v'))
+        ensures (evt.Some? && Network.Host.Spec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), evt.value)) || (evt.None? && VariablesAbstraction(c, v) == VariablesAbstraction(c, v'))
 }

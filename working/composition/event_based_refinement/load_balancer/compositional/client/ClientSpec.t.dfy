@@ -3,8 +3,6 @@ include "../shared/Spec.t.dfy"
 module ClientSpec refines AbstractSpec {
     datatype Event = SendRequest | ReceiveResponse
 
-    // todo - do we need to keep NoOp?
-
     datatype Constants = Constants
 
     datatype Variables = Variables(nums: seq<(int, int)>, sum: seq<int>)

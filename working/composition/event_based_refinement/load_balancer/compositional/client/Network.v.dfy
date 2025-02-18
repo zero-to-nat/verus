@@ -1,6 +1,6 @@
-include "ClientSpec.t.dfy"
+include "ClientHost.v.dfy"
 include "../shared/Network.t.dfy"
 
 module ClientNetwork refines AbstractNetwork {
-    datatype Message = ClientRequest(request: ServiceRequest<(int, int)>) | ClientResponse(response: ServiceResponse<int>)
+    import opened Host = ClientHost
 }

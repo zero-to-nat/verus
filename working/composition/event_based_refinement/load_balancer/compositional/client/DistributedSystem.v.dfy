@@ -1,6 +1,6 @@
 include "../shared/DistributedSystem.t.dfy"
-include "ClientHost.v.dfy"
+include "Network.v.dfy"
 
 module DistributedSystem refines AbstractDistributedSystem {
-    import opened Host = ClientHost
+    import Network = ClientNetwork
 }

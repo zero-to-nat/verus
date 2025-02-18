@@ -1,10 +1,10 @@
 include "ServerSpec.t.dfy"
-include "Network.v.dfy"
 include "../shared/Host.t.dfy"
 
 module ServerHost refines AbstractHost {
     import opened Spec = ServerSpec
-    import Network = ServerNetwork
+
+    datatype Message = ServerRequest(request: ServiceRequest<(int, int)>) | ServerResponse(response: ServiceResponse<int>)
 
     datatype Constants = Constants
     {
@@ -39,7 +39,7 @@ module ServerHost refines AbstractHost {
         && |v.responses| == 0
     }
 
-    ghost predicate Compute(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: Network.MessageOps) {
+    ghost predicate Compute(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps) {
         && v.WF(c)
         && v'.WF(c)
         && evt.Some? && evt.value.Compute?
@@ -54,7 +54,7 @@ module ServerHost refines AbstractHost {
         && msgOps.send.value.response == v'.responses[|v'.responses| - 1]
     }
 
-    ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: Network.MessageOps)
+    ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps)
     {
         Compute(c, v, v', evt, msgOps) 
     }

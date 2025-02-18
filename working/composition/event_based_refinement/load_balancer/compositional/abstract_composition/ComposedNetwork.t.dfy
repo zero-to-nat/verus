@@ -1,30 +1,12 @@
 include "../shared/Types.t.dfy"
-include "../shared/Network.t.dfy"
-include "../shared/Host.t.dfy"
+include "ComposedHost.t.dfy"
 
+// analogous to module AbstractNetwork
 abstract module ComposedNetwork {
     import opened Types
-    import HostA : AbstractHost
-    import HostB : AbstractHost
-    import NetworkA : HostA.Network
-    import NetworkB : HostB.Network
+    import opened Host : ComposedHost
 
-    datatype Message = MessageA(msgA: NetworkA.Message) | MessageB(msgB: NetworkB.Message)
-    // todo - can we modify this so that this module can still refine AbstractNetwork?
-    datatype MessageOps = MessageOps(recv:Option<Message>, send:Option<Message>, send_trans:Option<Message>)
-
-    // todo - this feels like it belongs somewhere else
-    ghost predicate TranslateAToB(msgA: NetworkA.Message, msgB: NetworkB.Message)
-    ghost predicate TranslateBToA(msgB: NetworkB.Message, msgA: NetworkA.Message)
-
-    ghost predicate Translate(fromMsg: Option<Message>, toMsg: Option<Message>) {
-        match (fromMsg, toMsg)
-        case (Some(MessageA(_)), Some(MessageB(_))) => TranslateAToB(fromMsg.value.msgA, toMsg.value.msgB)
-        case (Some(MessageB(_)), Some(MessageA(_))) => TranslateBToA(fromMsg.value.msgB, toMsg.value.msgA)
-        case _ => false
-    }
-
-    datatype Constants = Constants  // no constants for network
+    datatype Constants = Constants
 
     datatype Variables = Variables(sentMsgs:set<Message>)
 

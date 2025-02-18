@@ -6,10 +6,10 @@ include "DistributedSystem.v.dfy"
 module RefinementProof refines RefinementTheorem {
     import opened DistributedSystem = DistributedSystem
 
-    ghost function ConstantsAbstraction(c: DistributedSystem.Constants) : Host.Spec.Constants
+    ghost function ConstantsAbstraction(c: Constants) : Network.Host.Spec.Constants
 //        requires c.WF()
     {
-        Host.Spec.Constants()
+        Network.Host.Spec.Constants()
     }
 
     ghost function MapClientRequests(clientRequests: seq<ServiceRequest<(int, int)>>) : seq<(int, int)>
@@ -32,10 +32,10 @@ module RefinementProof refines RefinementTheorem {
             else [clientResponses[0].val] + MapClientResponses(clientResponses[1..])
     }
 
-    ghost function VariablesAbstraction(c: DistributedSystem.Constants, v: DistributedSystem.Variables) : Host.Spec.Variables
+    ghost function VariablesAbstraction(c: Constants, v: Variables) : Network.Host.Spec.Variables
 //        requires v.WF(c)
     {
-        Host.Spec.Variables(
+        Network.Host.Spec.Variables(
             MapClientRequests(v.hosts[0].requests), 
             MapClientResponses(v.hosts[0].responses)
         )
@@ -61,21 +61,21 @@ module RefinementProof refines RefinementTheorem {
             && v.hosts[0].requests[msg.response.seqNo].val.0 + v.hosts[0].requests[msg.response.seqNo].val.1 == msg.response.val
     }
 
-    ghost predicate Inv(c: DistributedSystem.Constants, v: DistributedSystem.Variables)
+    ghost predicate Inv(c: Constants, v: Variables)
     {
         && v.WF(c)
         && Inv_ClientRequestMsg(c, v)
         && Inv_ClientResponseMsg(c, v)
    }
 
-    lemma RefinementInit(c: DistributedSystem.Constants, v: DistributedSystem.Variables)
+    lemma RefinementInit(c: Constants, v: Variables)
 //        requires DistributedSystem.Init(c, v)
 //        ensures Inv(c, v)
 //        ensures Spec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
     {
     }
 
-    lemma RefinementNext(c: DistributedSystem.Constants, v: DistributedSystem.Variables, v': DistributedSystem.Variables, evt: Option<Host.Spec.Event>, step: DistributedSystem.Step)
+    lemma RefinementNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>, step: Step)
 //        requires DistributedSystem.NextStep(c, v, v', evt, step)
 //        requires Inv(c, v)
 //        ensures Inv(c, v') 
