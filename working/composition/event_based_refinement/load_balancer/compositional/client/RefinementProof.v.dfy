@@ -4,7 +4,7 @@ include "Network.v.dfy"
 include "DistributedSystem.v.dfy"
 
 module RefinementProof refines RefinementTheorem {
-    import opened DistributedSystem = DistributedSystem
+    import opened DistributedSystem = ClientDistributedSystem
 
     ghost function ConstantsAbstraction(c: Constants) : Network.Host.Spec.Constants
 //        requires c.WF()

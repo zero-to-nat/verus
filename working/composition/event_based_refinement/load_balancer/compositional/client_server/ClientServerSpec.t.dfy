@@ -1,8 +1,8 @@
 include "../abstract_composition/ComposedSpec.t.dfy"
-include "../client/ClientHost.v.dfy"
-include "../server/ServerHost.v.dfy"
+include "../client/DistributedSystem.v.dfy"
+include "../server/DistributedSystem.v.dfy"
 
 module ClientServerSpec refines ComposedSpec {
-    import HostA = ClientHost
-    import HostB = ServerHost
+    import DSA = ClientDistributedSystem
+    import DSB = ServerDistributedSystem
 }
