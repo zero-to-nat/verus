@@ -3,8 +3,8 @@ include "ServerHost.v.dfy"
 include "Network.v.dfy"
 include "DistributedSystem.v.dfy"
 
-module RefinementProof refines RefinementTheorem {
-    import opened DistributedSystem = ServerDistributedSystem
+module ServerRefinementProof refines ServerDistributedSystem {
+    //import opened DistributedSystem = ServerDistributedSystem
 
     ghost function ConstantsAbstraction(c: Constants) : Network.Host.Spec.Constants
 //        requires c.WF()
@@ -29,7 +29,7 @@ module RefinementProof refines RefinementTheorem {
         Network.Host.Spec.Variables(MapLog(v.hosts[0].requests, v.hosts[0].responses))
     }
 
-    ghost predicate Inv_ServerResponseMsg(c: DistributedSystem.Constants, v: DistributedSystem.Variables) 
+    ghost predicate Inv_ServerResponseMsg(c: Constants, v: Variables) 
         requires v.WF(c)
     {
         forall msg :: 

@@ -1,8 +1,8 @@
 include "../abstract_composition/ComposedSpec.t.dfy"
-include "../client/DistributedSystem.v.dfy"
-include "../server/DistributedSystem.v.dfy"
+include "../client/RefinementProof.v.dfy"
+include "../server/RefinementProof.v.dfy"
 
 module ClientServerSpec refines ComposedSpec {
-    import DSA = ClientDistributedSystem
-    import DSB = ServerDistributedSystem
+    import DSA = ClientRefinementProof
+    import DSB = ServerRefinementProof
 }

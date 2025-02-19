@@ -1,7 +1,7 @@
 include "../shared/Types.t.dfy"
 include "ComposedNetwork.t.dfy"
 
-// analogous to module AbstractDistributedSystem
+// analogous to module: AbstractDistributedSystem
 abstract module ComposedDistributedSystem {
     import opened Types
     import opened Network: ComposedNetwork

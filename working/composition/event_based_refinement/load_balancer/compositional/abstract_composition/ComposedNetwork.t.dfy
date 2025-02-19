@@ -2,7 +2,7 @@ include "../shared/Types.t.dfy"
 include "ComposedSpec.t.dfy"
 include "../shared/DistributedSystem.t.dfy"
 
-// analogous to module AbstractNetwork
+// analogous to module: AbstractNetwork
 abstract module ComposedNetwork {
     import opened Types
     import opened Spec: ComposedSpec

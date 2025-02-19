@@ -1,10 +1,9 @@
 include "Types.t.dfy"
-include "Host.t.dfy"
 include "DistributedSystem.t.dfy"
 
-abstract module RefinementTheorem {
-    import opened Types
-    import opened DistributedSystem: AbstractDistributedSystem
+abstract module RefinementTheorem refines AbstractDistributedSystem {
+    //import opened Types
+    //import opened DistributedSystem: AbstractDistributedSystem
 
     ghost function ConstantsAbstraction(c: Constants) : Network.Host.Spec.Constants
         requires c.WF()

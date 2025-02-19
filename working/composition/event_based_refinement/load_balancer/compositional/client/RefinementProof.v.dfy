@@ -1,10 +1,7 @@
 include "../shared/RefinementObligation.t.dfy"
-include "ClientHost.v.dfy"
-include "Network.v.dfy"
 include "DistributedSystem.v.dfy"
 
-module RefinementProof refines RefinementTheorem {
-    import opened DistributedSystem = ClientDistributedSystem
+module ClientRefinementProof refines ClientDistributedSystem {
 
     ghost function ConstantsAbstraction(c: Constants) : Network.Host.Spec.Constants
 //        requires c.WF()
@@ -41,7 +38,7 @@ module RefinementProof refines RefinementTheorem {
         )
     }
 
-    ghost predicate Inv_ClientRequestMsg(c: DistributedSystem.Constants, v: DistributedSystem.Variables) 
+    ghost predicate Inv_ClientRequestMsg(c: Constants, v: Variables) 
         requires v.WF(c)
     {
         forall msg :: 
@@ -51,7 +48,7 @@ module RefinementProof refines RefinementTheorem {
             && v.hosts[0].requests[msg.request.seqNo] == msg.request
     }
 
-    ghost predicate Inv_ClientResponseMsg(c: DistributedSystem.Constants, v: DistributedSystem.Variables) 
+    ghost predicate Inv_ClientResponseMsg(c: Constants, v: Variables) 
         requires v.WF(c)
     {
         forall msg :: 

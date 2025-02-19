@@ -1,9 +1,9 @@
 include "../shared/Spec.t.dfy"
-include "../shared/DistributedSystem.t.dfy"
+include "../shared/RefinementObligation.t.dfy"
 
 abstract module ComposedSpec refines AbstractSpec {
-    import DSA : AbstractDistributedSystem
-    import DSB : AbstractDistributedSystem
+    import DSA : RefinementTheorem
+    import DSB : RefinementTheorem
 
     datatype Event = EventA(evtA: DSA.Network.Host.Spec.Event) | EventB(evtB: DSB.Network.Host.Spec.Event)
 
