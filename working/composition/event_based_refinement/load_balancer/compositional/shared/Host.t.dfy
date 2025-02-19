@@ -5,8 +5,10 @@ abstract module AbstractHost {
     import opened Types
     import opened Spec: AbstractSpec
 
-    type Message(==)
+    type Message(==, !new)
     datatype MessageOps = MessageOps(recv:Option<Message>, send:Option<Message>)
+
+    ghost predicate ExternalMessageSend(msg: Message)
 
     type Constants {
         ghost predicate WF()

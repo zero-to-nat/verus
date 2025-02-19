@@ -37,6 +37,9 @@ module ServerRefinementProof refines ServerDistributedSystem {
             && msg.ServerResponse? ==> 
             && |v.hosts[0].responses| > msg.response.seqNo 
             && v.hosts[0].responses[msg.response.seqNo] == msg.response
+            && msg.response.seqNo == v.hosts[0].requests[msg.response.seqNo].seqNo
+            && msg.response.val == v.hosts[0].requests[msg.response.seqNo].val.0 + v.hosts[0].requests[msg.response.seqNo].val.1
+            && Network.Host.ServerRequest(v.hosts[0].requests[msg.response.seqNo]) in v.network.sentMsgs
     }
 
     ghost predicate Inv(c: Constants, v: Variables)
@@ -46,14 +49,23 @@ module ServerRefinementProof refines ServerDistributedSystem {
    }
 
     lemma RefinementInit(c: Constants, v: Variables)
-//        requires DistributedSystem.Init(c, v)
+//        requires Init(c, v)
 //        ensures Inv(c, v)
 //        ensures Spec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
     {
     }
 
-    lemma RefinementNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>, step: Step)
-//        requires DistributedSystem.NextStep(c, v, v', evt, step)
+    lemma InvInductiveBase(c: Constants, v: Variables)
+        // requires Init(c, v)
+        // ensures Inv(c, v)
+
+    lemma InvInductiveNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>)
+        // requires Next(c, v, v', evt)
+        // requires Inv(c, v)
+        // ensures Inv(c, v')
+
+    lemma RefinementNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>)
+//        requires Next(c, v, v', evt)
 //        requires Inv(c, v)
 //        ensures Inv(c, v') 
 //        ensures Spec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), evt) || (VariablesAbstraction(c, v) == VariablesAbstraction(c, v') && evt == NoOp)

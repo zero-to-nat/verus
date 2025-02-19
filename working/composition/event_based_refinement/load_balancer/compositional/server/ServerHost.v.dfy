@@ -6,6 +6,11 @@ module ServerHost refines AbstractHost {
 
     datatype Message = ServerRequest(request: ServiceRequest<(int, int)>) | ServerResponse(response: ServiceResponse<int>)
 
+    ghost predicate ExternalMessageSend(msg: Message) 
+    { 
+        msg.ServerRequest?
+    }
+
     datatype Constants = Constants
     {
         ghost predicate WF() {
@@ -56,6 +61,6 @@ module ServerHost refines AbstractHost {
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps)
     {
-        Compute(c, v, v', evt, msgOps) 
+        || Compute(c, v, v', evt, msgOps) 
     }
 }

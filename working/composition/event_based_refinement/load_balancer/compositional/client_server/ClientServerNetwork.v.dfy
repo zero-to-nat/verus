@@ -4,17 +4,13 @@ include "ClientServerSpec.t.dfy"
 module ClientServerNetwork refines ComposedNetwork {
     import opened Spec = ClientServerSpec
 
-    ghost predicate TranslateAToB(msgA: DSA.Network.Host.Message, msgB: DSB.Network.Host.Message)
+    ghost predicate TranslateExternalMessages(fromMsg: Option<ComposedMessage>, toMsg: Option<ComposedMessage>) 
     {
-        && msgA.ClientRequest?
-        && msgB.ServerRequest?
-        && msgA.request == msgB.request
-    }
-
-    ghost predicate TranslateBToA(msgB: DSB.Network.Host.Message, msgA: DSA.Network.Host.Message)
-    {
-        && msgB.ServerResponse?
-        && msgA.ClientResponse?
-        && msgB.response == msgA.response
+        match fromMsg {
+            case Some(MessageA(ClientRequest(r))) => toMsg == Some(MessageB(Spec.DSB.Network.Host.ServerRequest(r)))
+            case Some(MessageB(ServerResponse(r))) => toMsg == Some(MessageA(Spec.DSA.Network.Host.ClientResponse(r)))
+            case Some(_) => toMsg == None
+            case None => toMsg == None
+        }
     }
 }

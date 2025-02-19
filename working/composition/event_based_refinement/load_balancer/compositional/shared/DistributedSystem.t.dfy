@@ -37,22 +37,35 @@ abstract module AbstractDistributedSystem {
     {
         && v.WF(c)
         && v'.WF(c)
+        && evt.Some?
         && 0 <= hostId < |v.hosts|
         && Host.Next(c.hosts[hostId], v.hosts[hostId], v'.hosts[hostId], evt, msgOps)
         && (forall i :: 0 <= i < |v.hosts| && i != hostId ==> v.hosts[i] == v'.hosts[i])
         && Network.Next(c.network, v.network, v'.network, msgOps)
     }
 
+    ghost predicate NetworkAction(c: Constants, v: Variables, v': Variables, evt: Option<Host.Spec.Event>, msgOps: Host.MessageOps)
+    {
+        && v.WF(c)
+        && v'.WF(c)
+        && evt.None?
+        && (msgOps.send.None? || Host.ExternalMessageSend(msgOps.send.value))
+        && (forall i :: 0 <= i < |v.hosts| ==> v.hosts[i] == v'.hosts[i])
+        && Network.Next(c.network, v.network, v'.network, msgOps)
+    }
+
     datatype Step =
         | HostActionStep(hostId: nat, msgOps: Host.MessageOps)
+        | NetworkActionStep(msgOps: Host.MessageOps)
 
     ghost predicate NextStep(c: Constants, v: Variables, v': Variables, evt: Option<Host.Spec.Event>, step: Step)
     {
-        && HostAction(c, v, v', evt, step.hostId, step.msgOps)
+        || (step.HostActionStep? && HostAction(c, v, v', evt, step.hostId, step.msgOps))
+        || (step.NetworkActionStep? && NetworkAction(c, v, v', evt, step.msgOps))
     }
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Option<Host.Spec.Event>)
-    //{
-    //    exists step :: NextStep(c, v, v', evt, step)
-    //}
+    {
+        exists step :: NextStep(c, v, v', evt, step)
+    }
 }

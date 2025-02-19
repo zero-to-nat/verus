@@ -44,9 +44,10 @@ abstract module ComposedDistributedSystem {
     }
 
     ghost function UnwrapEventA(evt: Option<Spec.Event>) : Option<Spec.DSA.Network.Host.Spec.Event>
-        requires IsEventA(evt)
     {
-        if evt.Some? then Some(evt.value.evtA) else None
+        if evt.Some? 
+        then if IsEventA(evt) then Some(evt.value.evtA) else None
+        else None
     }
 
     ghost predicate IsEventB(evt: Option<Spec.Event>)
@@ -56,9 +57,10 @@ abstract module ComposedDistributedSystem {
     }
 
     ghost function UnwrapEventB(evt: Option<Spec.Event>) : Option<Spec.DSB.Network.Host.Spec.Event>
-        requires IsEventB(evt)
     {
-        if evt.Some? then Some(evt.value.evtB) else None
+        if evt.Some? 
+        then if IsEventB(evt) then Some(evt.value.evtB) else None
+        else None
     }
 
      ghost predicate IsMessageOpsA(msgOps: ComposedMessageOps) 
@@ -75,6 +77,20 @@ abstract module ComposedDistributedSystem {
         Spec.DSA.Network.Host.MessageOps(
             if msgOps.recv.None? then None else Some(msgOps.recv.value.msgA),
             if msgOps.send.None? then None else Some(msgOps.send.value.msgA)
+        )
+    }
+
+    ghost predicate IsTransMessageA(msgOps: ComposedMessageOps) 
+    {
+        msgOps.send_trans.None? || (msgOps.send_trans.Some? && msgOps.send_trans.value.MessageA?)
+    }
+
+    ghost function UnwrapTransMessageOpsA(msgOps: ComposedMessageOps) : Spec.DSA.Network.Host.MessageOps
+        requires IsTransMessageA(msgOps)
+    {
+        Spec.DSA.Network.Host.MessageOps(
+            None,
+            if msgOps.send_trans.None? then None else Some(msgOps.send_trans.value.msgA)
         )
     }
 
@@ -95,14 +111,29 @@ abstract module ComposedDistributedSystem {
         )
     }
 
+    ghost predicate IsTransMessageB(msgOps: ComposedMessageOps) 
+    {
+        msgOps.send_trans.None? || (msgOps.send_trans.Some? && msgOps.send_trans.value.MessageB?)
+    }
+
+    ghost function UnwrapTransMessageOpsB(msgOps: ComposedMessageOps) : Spec.DSB.Network.Host.MessageOps
+        requires IsTransMessageB(msgOps)
+    {
+        Spec.DSB.Network.Host.MessageOps(
+            None,
+            if msgOps.send_trans.None? then None else Some(msgOps.send_trans.value.msgB)
+        )
+    }
+
     ghost predicate DSAAction(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: ComposedMessageOps)
         requires v.WF(c)
         requires v'.WF(c)
     {
         && IsEventA(evt)
         && IsMessageOpsA(msgOps)
+        && IsTransMessageB(msgOps)
         && (exists hostId :: Spec.DSA.NextStep(c.dsA, v.dsA, v'.dsA, UnwrapEventA(evt), Spec.DSA.HostActionStep(hostId, UnwrapMessageOpsA(msgOps))))
-        && v.dsB == v'.dsB
+        && Spec.DSB.NextStep(c.dsB, v.dsB, v'.dsB, UnwrapEventB(evt), Spec.DSB.NetworkActionStep(UnwrapTransMessageOpsB(msgOps)))
     }
 
     ghost predicate DSBAction(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: ComposedMessageOps)
@@ -111,8 +142,9 @@ abstract module ComposedDistributedSystem {
     {
         && IsEventB(evt)
         && IsMessageOpsB(msgOps)
+        && IsTransMessageA(msgOps)
         && (exists hostId :: Spec.DSB.NextStep(c.dsB, v.dsB, v'.dsB, UnwrapEventB(evt), Spec.DSB.HostActionStep(hostId, UnwrapMessageOpsB(msgOps))))
-        && v.dsB == v'.dsB
+        && Spec.DSA.NextStep(c.dsA, v.dsA, v'.dsA, UnwrapEventA(evt), Spec.DSA.NetworkActionStep(UnwrapTransMessageOpsA(msgOps)))
     }
 
     ghost predicate DSAction(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: ComposedMessageOps)
@@ -128,11 +160,11 @@ abstract module ComposedDistributedSystem {
 
     ghost predicate NextStep(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, step: Step)
     {
-        && DSAction(c, v, v', evt,step.msgOps)
+        && DSAction(c, v, v', evt, step.msgOps)
     }
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>)
-    //{
-    //    exists step :: NextStep(c, v, v', evt, step)
-    //}
+    {
+        exists step :: NextStep(c, v, v', evt, step)
+    }
 }

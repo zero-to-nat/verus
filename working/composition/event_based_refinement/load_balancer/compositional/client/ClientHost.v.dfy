@@ -6,6 +6,11 @@ module ClientHost refines AbstractHost {
 
     datatype Message = ClientRequest(request: ServiceRequest<(int, int)>) | ClientResponse(response: ServiceResponse<int>)
 
+    ghost predicate ExternalMessageSend(msg: Message) 
+    {
+        && msg.ClientResponse?
+    }
+
     datatype Constants = Constants
     {
         ghost predicate WF() {

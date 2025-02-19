@@ -10,15 +10,7 @@ abstract module ComposedNetwork {
     datatype ComposedMessage = MessageA(msgA: DSA.Network.Host.Message) | MessageB(msgB: DSB.Network.Host.Message)
     datatype ComposedMessageOps = MessageOps(recv:Option<ComposedMessage>, send:Option<ComposedMessage>, send_trans:Option<ComposedMessage>)
 
-    ghost predicate TranslateAToB(msgA: DSA.Network.Host.Message, msgB: DSB.Network.Host.Message)
-    ghost predicate TranslateBToA(msgB: DSB.Network.Host.Message, msgA: DSA.Network.Host.Message)
-
-    ghost predicate Translate(fromMsg: Option<ComposedMessage>, toMsg: Option<ComposedMessage>) {
-        match (fromMsg, toMsg)
-        case (Some(MessageA(_)), Some(MessageB(_))) => TranslateAToB(fromMsg.value.msgA, toMsg.value.msgB)
-        case (Some(MessageB(_)), Some(MessageA(_))) => TranslateBToA(fromMsg.value.msgB, toMsg.value.msgA)
-        case _ => false
-    }
+    ghost predicate TranslateExternalMessages(fromMsg: Option<ComposedMessage>, toMsg: Option<ComposedMessage>) 
 
     datatype Constants = Constants
 
@@ -32,8 +24,9 @@ abstract module ComposedNetwork {
     ghost predicate Next(c: Constants, v: Variables, v': Variables, msgOps: ComposedMessageOps)
     {
         && (msgOps.recv.Some? ==> msgOps.recv.value in v.sentMsgs)
+        && TranslateExternalMessages(msgOps.send, msgOps.send_trans) 
         && v'.sentMsgs == v.sentMsgs
             + (if msgOps.send.None? then {} else { msgOps.send.value })
-            + (if Translate(msgOps.send, msgOps.send_trans) then { msgOps.send_trans.value } else {})
+            + (if msgOps.send_trans.None? then {} else { msgOps.send_trans.value })
   }
 }

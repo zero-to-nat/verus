@@ -66,17 +66,37 @@ module ClientRefinementProof refines ClientDistributedSystem {
    }
 
     lemma RefinementInit(c: Constants, v: Variables)
-//        requires DistributedSystem.Init(c, v)
+//        requires Init(c, v)
 //        ensures Inv(c, v)
 //        ensures Spec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
     {
     }
 
-    lemma RefinementNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>, step: Step)
-//        requires DistributedSystem.NextStep(c, v, v', evt, step)
+    lemma InvInductiveBase(c: Constants, v: Variables)
+        // requires Init(c, v)
+        // ensures Inv(c, v)
+
+    lemma InvInductiveNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>)
+        // requires Next(c, v, v', evt)
+        // requires Inv(c, v)
+        // ensures Inv(c, v')
+
+    // hmmm??
+
+    lemma RefinementNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>)
+//        requires Next(c, v, v', evt)
 //        requires Inv(c, v)
 //        ensures Inv(c, v') 
 //        ensures Spec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), evt) || (VariablesAbstraction(c, v) == VariablesAbstraction(c, v') && evt == NoOp)
     {
+        if (evt.None?) {
+
+        } else {
+            if (evt.value.SendRequest?) {
+
+            } else {
+                // cant show that ReceiveResponse is always safe...
+            }
+        }
     }
 }
