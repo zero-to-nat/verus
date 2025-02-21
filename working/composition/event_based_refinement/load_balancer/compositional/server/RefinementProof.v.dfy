@@ -1,10 +1,7 @@
-include "../shared/RefinementObligation.t.dfy"
 include "ServerHost.v.dfy"
-include "Network.v.dfy"
-include "DistributedSystem.v.dfy"
+include "ServerComponent.v.dfy"
 
-module ServerRefinementProof refines ServerDistributedSystem {
-    //import opened DistributedSystem = ServerDistributedSystem
+module ServerComponent refines ServerComponentDef {
 
     ghost function ConstantsAbstraction(c: Constants) : Network.Host.Spec.Constants
 //        requires c.WF()
@@ -26,7 +23,7 @@ module ServerRefinementProof refines ServerDistributedSystem {
     ghost function VariablesAbstraction(c: Constants, v: Variables) : Network.Host.Spec.Variables
 //        requires v.WF(c)
     {
-        Network.Host.Spec.Variables(MapLog(v.hosts[0].requests, v.hosts[0].responses))
+        Network.Host.Spec.Variables(MapLog(v.v.hosts[0].requests, v.v.hosts[0].responses))
     }
 
     ghost predicate Inv_ServerResponseMsg(c: Constants, v: Variables) 
@@ -35,11 +32,11 @@ module ServerRefinementProof refines ServerDistributedSystem {
         forall msg :: 
             && msg in v.network.sentMsgs 
             && msg.ServerResponse? ==> 
-            && |v.hosts[0].responses| > msg.response.seqNo 
-            && v.hosts[0].responses[msg.response.seqNo] == msg.response
-            && msg.response.seqNo == v.hosts[0].requests[msg.response.seqNo].seqNo
-            && msg.response.val == v.hosts[0].requests[msg.response.seqNo].val.0 + v.hosts[0].requests[msg.response.seqNo].val.1
-            && Network.Host.ServerRequest(v.hosts[0].requests[msg.response.seqNo]) in v.network.sentMsgs
+            && |v.v.hosts[0].responses| > msg.response.seqNo 
+            && v.v.hosts[0].responses[msg.response.seqNo] == msg.response
+            && msg.response.seqNo == v.v.hosts[0].requests[msg.response.seqNo].seqNo
+            && msg.response.val == v.v.hosts[0].requests[msg.response.seqNo].val.0 + v.v.hosts[0].requests[msg.response.seqNo].val.1
+            && Network.Host.ServerRequest(v.v.hosts[0].requests[msg.response.seqNo]) in v.network.sentMsgs
     }
 
     ghost predicate Inv(c: Constants, v: Variables)
@@ -50,7 +47,6 @@ module ServerRefinementProof refines ServerDistributedSystem {
 
     lemma RefinementInit(c: Constants, v: Variables)
 //        requires Init(c, v)
-//        ensures Inv(c, v)
 //        ensures Spec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
     {
     }
@@ -58,17 +54,17 @@ module ServerRefinementProof refines ServerDistributedSystem {
     lemma InvInductiveBase(c: Constants, v: Variables)
         // requires Init(c, v)
         // ensures Inv(c, v)
+    {}
 
     lemma InvInductiveNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>)
         // requires Next(c, v, v', evt)
         // requires Inv(c, v)
         // ensures Inv(c, v')
+    {}
 
     lemma RefinementNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>)
 //        requires Next(c, v, v', evt)
 //        requires Inv(c, v)
-//        ensures Inv(c, v') 
 //        ensures Spec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), evt) || (VariablesAbstraction(c, v) == VariablesAbstraction(c, v') && evt == NoOp)
-    {
-    }
+    {}
 }

@@ -1,14 +1,14 @@
 include "ServerSpec.t.dfy"
-include "../shared/Host.t.dfy"
+include "../shared/AbstractHost.t.dfy"
 
 module ServerHost refines AbstractHost {
     import opened Spec = ServerSpec
 
     datatype Message = ServerRequest(request: ServiceRequest<(int, int)>) | ServerResponse(response: ServiceResponse<int>)
 
-    ghost predicate ExternalMessageSend(msg: Message) 
+    ghost predicate ExternalMessageSend(msgs: seq<Message>) 
     { 
-        msg.ServerRequest?
+        forall m :: m in msgs ==> m.ServerRequest?
     }
 
     datatype Constants = Constants
@@ -44,22 +44,20 @@ module ServerHost refines AbstractHost {
         && |v.responses| == 0
     }
 
-    ghost predicate Compute(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps) {
+    ghost predicate Compute(c: Constants, v: Variables, v': Variables, evt: Spec.Event, msgOps: MessageOps) {
         && v.WF(c)
         && v'.WF(c)
-        && evt.Some? && evt.value.Compute?
-        && msgOps.recv.Some? && msgOps.recv.value.ServerRequest?
-        && msgOps.send.Some? && msgOps.send.value.ServerResponse?
+        && evt.Compute?
         && |v'.requests| == |v.requests| + 1
         && v'.requests[..|v'.requests| - 1] == v.requests
         && |v'.responses| == |v.responses| + 1
         && v'.responses[..|v'.responses| - 1] == v.responses
         && v'.responses[|v'.responses| - 1] == ServiceResponse(v'.requests[|v'.requests| - 1].seqNo, v'.requests[|v'.requests| - 1].val.0 + v'.requests[|v'.requests| - 1].val.1)
-        && msgOps.recv.value.request == v'.requests[|v'.requests| - 1]
-        && msgOps.send.value.response == v'.responses[|v'.responses| - 1]
+        && msgOps.recv == [ ServerRequest(v'.requests[|v'.requests| - 1]) ]
+        && msgOps.send == [ ServerResponse(v'.responses[|v'.responses| - 1]) ]
     }
 
-    ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps)
+    ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Spec.Event, msgOps: MessageOps)
     {
         || Compute(c, v, v', evt, msgOps) 
     }

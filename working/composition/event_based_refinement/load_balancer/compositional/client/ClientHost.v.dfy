@@ -1,14 +1,14 @@
 include "ClientSpec.t.dfy"
-include "../shared/Host.t.dfy"
+include "../shared/AbstractHost.t.dfy"
 
 module ClientHost refines AbstractHost {
     import opened Spec = ClientSpec
 
     datatype Message = ClientRequest(request: ServiceRequest<(int, int)>) | ClientResponse(response: ServiceResponse<int>)
 
-    ghost predicate ExternalMessageSend(msg: Message) 
+    ghost predicate ExternalMessageSend(msgs: seq<Message>) 
     {
-        && msg.ClientResponse?
+        forall m :: m in msgs ==> m.ClientResponse?
     }
 
     datatype Constants = Constants
@@ -44,33 +44,30 @@ module ClientHost refines AbstractHost {
         && |v.responses| == 0
     }
 
-    ghost predicate SendRequest(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps) {
+    ghost predicate SendRequest(c: Constants, v: Variables, v': Variables, evt: Spec.Event, msgOps: MessageOps) {
         && v.WF(c)
         && v'.WF(c)
-        && evt.Some? && evt.value.SendRequest?
+        && evt.SendRequest?
         && v.responses == v'.responses
         && |v'.requests| == |v.requests| + 1
         && v'.requests[..|v'.requests| - 1] == v.requests
-        && msgOps.recv.None?
-        && msgOps.send.Some?
-        && msgOps.send.value.ClientRequest?
-        && msgOps.send.value.request == v'.requests[|v'.requests| - 1]
+        && msgOps.recv == []
+        && msgOps.send == [ ClientRequest(v'.requests[|v'.requests| - 1]) ]
     }
 
-    ghost predicate ReceiveResponse(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps) {
+    ghost predicate ReceiveResponse(c: Constants, v: Variables, v': Variables, evt: Spec.Event, msgOps: MessageOps) {
         && v.WF(c)
         && v'.WF(c)
-        && evt.Some? && evt.value.ReceiveResponse?
+        && evt.ReceiveResponse?
         && v.requests == v'.requests
-        && msgOps.recv.Some?
-        && msgOps.recv.value.ClientResponse?
-        && msgOps.send.None?
+        && msgOps.send == []
         && |v'.responses| == |v.responses| + 1
         && v'.responses[..|v'.responses| - 1] == v.responses 
-        && v'.responses[|v'.responses| - 1] == msgOps.recv.value.response
+        && msgOps.recv == [ ClientResponse(v'.responses[|v'.responses| - 1]) ]
+        && v'.responses[|v'.responses| - 1].val == v'.requests[v'.responses[|v'.responses| - 1].seqNo].val.0 + v'.requests[v'.responses[|v'.responses| - 1].seqNo].val.1
     }
 
-    ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Option<Spec.Event>, msgOps: MessageOps)
+    ghost predicate Next(c: Constants, v: Variables, v': Variables, evt: Spec.Event, msgOps: MessageOps)
     {
         || SendRequest(c, v, v', evt, msgOps) 
         || ReceiveResponse(c, v, v', evt, msgOps) 

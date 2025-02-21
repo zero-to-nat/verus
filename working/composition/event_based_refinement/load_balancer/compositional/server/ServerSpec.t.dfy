@@ -1,4 +1,4 @@
-include "../shared/Spec.t.dfy"
+include "../shared/AbstractSpec.t.dfy"
 
 module ServerSpec refines AbstractSpec {
     datatype Event = Compute

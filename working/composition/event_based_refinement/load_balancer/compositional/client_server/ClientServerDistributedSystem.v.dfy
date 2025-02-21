@@ -1,7 +1,7 @@
-include "../abstract_composition/ComposedRefinementObligation.t.dfy"
+include "../abstract_composition/ComposedComponent.t.dfy"
 include "ClientServerNetwork.v.dfy"
 
-module ClientServerDistributedSystem refines ComposedRefinementTheorem {
+module Component refines ComposedComponent {
     import opened Network = ClientServerNetwork
 
     ghost predicate ValidNext(c: Constants, v: Variables, v': Variables)
@@ -15,86 +15,106 @@ module ClientServerDistributedSystem refines ComposedRefinementTheorem {
         ensures Init(c, behavior[0])
         ensures forall i:nat | i < |behavior|-1 :: ValidNext(c, behavior[i], behavior[i+1])
         ensures behavior[|behavior|-1].WF(c)
-        ensures |behavior[|behavior|-1].dsA.hosts[0].requests| == |behavior[|behavior|-1].dsA.hosts[0].responses| == 1
-        ensures behavior[|behavior|-1].dsA.hosts[0].responses[0].val == behavior[|behavior|-1].dsA.hosts[0].requests[0].val.0 + behavior[|behavior|-1].dsA.hosts[0].requests[0].val.1
+        ensures |behavior[|behavior|-1].v.componentA.v.hosts[0].requests| == |behavior[|behavior|-1].v.componentA.v.hosts[0].responses| == 1
+        ensures behavior[|behavior|-1].v.componentA.v.hosts[0].responses[0].val == behavior[|behavior|-1].v.componentA.v.hosts[0].requests[0].val.0 + behavior[|behavior|-1].v.componentA.v.hosts[0].requests[0].val.1
         {
             // Init
             behavior := [Variables.Variables(
-                Spec.DSA.Variables([Spec.DSA.Network.Host.Variables([], [])], Spec.DSA.Network.Variables({})),
-                Spec.DSB.Variables([Spec.DSB.Network.Host.Variables([], [])], Spec.DSB.Network.Variables({})),
-                Network.Variables({})
+                VariablesImpl(
+                    Host.Spec.ComponentA.Variables(
+                        Host.Spec.ComponentA.VariablesImpl.VariablesImpl([Host.Spec.ComponentA.Network.Host.Variables([], [])]), 
+                        Host.Spec.ComponentA.Network.Variables([])),
+                    Host.Spec.ComponentB.Variables(
+                        Host.Spec.ComponentB.VariablesImpl.VariablesImpl([Host.Spec.ComponentB.Network.Host.Variables([], [])]), 
+                        Host.Spec.ComponentB.Network.Variables([]))),
+                Network.Variables([])
             )];
 
             // SendRequest (client)
             var req := ServiceRequest(0, (4, 5));
-            var sentA := Spec.DSA.Network.Host.ClientRequest(req);
-            var sentB := Spec.DSB.Network.Host.ServerRequest(req);
-            var sent := MessageA(sentA);
-            var sentTrans := MessageB(sentB);
-            var msgOps := Network.MessageOps(None, Some(sent), Some(sentTrans));
-            var msgOpsA := Spec.DSA.Network.Host.MessageOps(None, Some(sentA));
-            var event := Some(Spec.EventA(Spec.DSA.Network.Host.Spec.SendRequest));
-            var eventA := Some(Spec.DSA.Network.Host.Spec.SendRequest);
+            var sentA := Host.Spec.ComponentA.Network.Host.ClientRequest(req);
+            var sentB := Host.Spec.ComponentB.Network.Host.ServerRequest(req);
+            var sent := Host.MessageA(sentA);
+            var sentTrans := Host.MessageB(sentB);
+            var msgOps := Host.ComposedMessageOps.MessageOps([], [sent], [sentTrans]);
+            var msgOpsA := UnwrapMessageOpsA(msgOps);
+            var event := Host.Spec.EventA(Host.Spec.ComponentA.Network.Host.Spec.SendRequest);
+            var eventA := Host.Spec.ComponentA.Network.Host.Spec.SendRequest;
             behavior := behavior + [Variables.Variables(
-                Spec.DSA.Variables([Spec.DSA.Network.Host.Variables([req], [])], Spec.DSA.Network.Variables({ sentA })),
-                Spec.DSB.Variables([Spec.DSB.Network.Host.Variables([], [])], Spec.DSB.Network.Variables({ sentB })),
-                Network.Variables({ sent, sentTrans })
+                VariablesImpl(
+                    Host.Spec.ComponentA.Variables(
+                        Host.Spec.ComponentA.VariablesImpl.VariablesImpl([Host.Spec.ComponentA.Network.Host.Variables([req], [])]), 
+                        Host.Spec.ComponentA.Network.Variables([ sentA ])),
+                    Host.Spec.ComponentB.Variables(
+                        Host.Spec.ComponentB.VariablesImpl.VariablesImpl([Host.Spec.ComponentB.Network.Host.Variables([], [])]), 
+                        Host.Spec.ComponentB.Network.Variables([ sentB ]))),
+                Network.Variables(msgOps.send + msgOps.send_trans)
             )];
-            assert Spec.DSA.Network.Host.SendRequest(c.dsA.hosts[0], behavior[0].dsA.hosts[0], behavior[1].dsA.hosts[0], eventA, msgOpsA);
-            assert Spec.DSA.NextStep(c.dsA, behavior[0].dsA, behavior[1].dsA, eventA, Spec.DSA.HostActionStep(0, msgOpsA));
-            assert UnwrapEventA(event) == eventA;
+            assert Host.Spec.ComponentA.Network.Host.SendRequest(c.c.componentA.c.hosts[0], behavior[0].v.componentA.v.hosts[0], behavior[1].v.componentA.v.hosts[0], eventA, msgOpsA);
+            assert Host.Spec.ComponentA.Action(c.c.componentA, behavior[0].v.componentA, behavior[1].v.componentA, eventA, msgOpsA, Host.Spec.ComponentA.HostActionStep(0));
             assert UnwrapMessageOpsA(msgOps) == msgOpsA;
-            assert DSAAction(c, behavior[0], behavior[1], event, msgOps);
-            assert DSAction(c, behavior[0], behavior[1], event, msgOps);
-            assert NextStep(c, behavior[0], behavior[1], event, DSActionStep(msgOps));
-            assert Next(c, behavior[0], behavior[1], event);
+            assert ComponentAAction(c, behavior[0], behavior[1], event, msgOps);
+            assert ComponentAction(c, behavior[0], behavior[1], event, msgOps);
+            assert Action(c, behavior[0], behavior[1], event, Host.MessageOps.MessageOps(msgOps.recv, msgOps.send + msgOps.send_trans), ComponentActionStep(msgOps));
+            assert NextStep(c, behavior[0], behavior[1], Some(event), Step.ActionStep(ComponentActionStep(msgOps), Host.MessageOps.MessageOps(msgOps.recv, msgOps.send + msgOps.send_trans)));
+            assert Next(c, behavior[0], behavior[1], Some(event));
 
             // Compute (server)
-            var recv := msgOps.send_trans.value;
+            var recv := msgOps.send_trans[0];
             var recvB := recv.msgB;
             var sum := recvB.request.val.0 + recvB.request.val.1;
             var resp := ServiceResponse(recvB.request.seqNo, sum);
-            var sentB2 := Spec.DSB.Network.Host.ServerResponse(resp);
-            var sentA2 := Spec.DSA.Network.Host.ClientResponse(resp);
-            var sent2 := MessageB(sentB2);
-            var sentTrans2 := MessageA(sentA2);
-            var msgOpsB := Spec.DSB.Network.Host.MessageOps(Some(recvB), Some(sentB2));
-            msgOps := Network.MessageOps(Some(recv), Some(sent2), Some(sentTrans2));
-            event := Some(Spec.EventB(Spec.DSB.Network.Host.Spec.Compute));
-            var eventB := Some(Spec.DSB.Network.Host.Spec.Compute);
+            var sentB2 := Host.Spec.ComponentB.Network.Host.ServerResponse(resp);
+            var sentA2 := Host.Spec.ComponentA.Network.Host.ClientResponse(resp);
+            var sent2 := Host.MessageB(sentB2);
+            var sentTrans2 := Host.MessageA(sentA2);
+            var msgOpsB := Host.Spec.ComponentB.Network.Host.MessageOps([recvB], [sentB2]);
+            msgOps := Host.ComposedMessageOps.MessageOps([recv], [sent2], [sentTrans2]);
+            event := Host.Spec.EventB(Host.Spec.ComponentB.Network.Host.Spec.Compute);
+            var eventB := Host.Spec.ComponentB.Network.Host.Spec.Compute;
             behavior := behavior + [Variables.Variables(
-                Spec.DSA.Variables([Spec.DSA.Network.Host.Variables([req], [])], Spec.DSA.Network.Variables({ sentA, sentA2 })),
-                Spec.DSB.Variables([Spec.DSB.Network.Host.Variables([req], [resp])], Spec.DSB.Network.Variables({ sentB, sentB2 })),
-                Network.Variables({ sent, sentTrans, sent2, sentTrans2 })
+                VariablesImpl(
+                    Host.Spec.ComponentA.Variables(
+                        Host.Spec.ComponentA.VariablesImpl.VariablesImpl([Host.Spec.ComponentA.Network.Host.Variables([req], [])]), 
+                        Host.Spec.ComponentA.Network.Variables([ sentA, sentA2 ])),
+                    Host.Spec.ComponentB.Variables(
+                        Host.Spec.ComponentB.VariablesImpl.VariablesImpl([Host.Spec.ComponentB.Network.Host.Variables([req], [resp])]), 
+                        Host.Spec.ComponentB.Network.Variables([ sentB, sentB2 ]))),
+                Network.Variables(behavior[1].network.sentMsgs + msgOps.send + msgOps.send_trans)
             )];
-            assert Spec.DSB.Network.Host.Compute(c.dsB.hosts[0], behavior[1].dsB.hosts[0], behavior[2].dsB.hosts[0], eventB, msgOpsB);
-            assert Spec.DSB.NextStep(c.dsB, behavior[1].dsB, behavior[2].dsB, eventB, Spec.DSB.HostActionStep(0, msgOpsB));
-            assert UnwrapEventB(event) == eventB;
+            assert Host.Spec.ComponentB.Network.Host.Compute(c.c.componentB.c.hosts[0], behavior[1].v.componentB.v.hosts[0], behavior[2].v.componentB.v.hosts[0], eventB, msgOpsB);
+            assert Host.Spec.ComponentB.Action(c.c.componentB, behavior[1].v.componentB, behavior[2].v.componentB, eventB, msgOpsB, Host.Spec.ComponentB.HostActionStep(0));
             assert UnwrapMessageOpsB(msgOps) == msgOpsB;
-            assert DSBAction(c, behavior[1], behavior[2], event, msgOps);
-            assert DSAction(c, behavior[1], behavior[2], event, msgOps);
-            assert NextStep(c, behavior[1], behavior[2], event, DSActionStep(msgOps));
-            assert Next(c, behavior[1], behavior[2], event);
+            assert ComponentBAction(c, behavior[1], behavior[2], event, msgOps);
+            assert ComponentAction(c, behavior[1], behavior[2], event, msgOps);
+            assert Action(c, behavior[1], behavior[2], event, Host.MessageOps.MessageOps(msgOps.recv, msgOps.send + msgOps.send_trans), ComponentActionStep(msgOps));
+            assert NextStep(c, behavior[1], behavior[2], Some(event), Step.ActionStep(ComponentActionStep(msgOps), Host.MessageOps.MessageOps(msgOps.recv, msgOps.send + msgOps.send_trans)));
+            assert Next(c, behavior[1], behavior[2], Some(event));
 
             // ReceiveResponse (client)
-            recv := msgOps.send_trans.value;
+            recv := msgOps.send_trans[0];
             var recvA := recv.msgA;
-            msgOpsA := Spec.DSA.Network.Host.MessageOps(Some(recvA), None);
-            msgOps := Network.MessageOps(Some(recv), None, None);
-            event := Some(Spec.EventA(Spec.DSA.Network.Host.Spec.ReceiveResponse));
-            eventA := Some(Spec.DSA.Network.Host.Spec.ReceiveResponse);
+            msgOpsA := Host.Spec.ComponentA.Network.Host.MessageOps([recvA], []);
+            msgOps := Host.ComposedMessageOps.MessageOps([recv], [], []);
+            event := Host.Spec.EventA(Host.Spec.ComponentA.Network.Host.Spec.ReceiveResponse);
+            eventA := Host.Spec.ComponentA.Network.Host.Spec.ReceiveResponse;
             behavior := behavior + [Variables.Variables(
-                Spec.DSA.Variables([Spec.DSA.Network.Host.Variables([req], [resp])], Spec.DSA.Network.Variables({ sentA, sentA2 })),
-                Spec.DSB.Variables([Spec.DSB.Network.Host.Variables([req], [resp])], Spec.DSB.Network.Variables({ sentB, sentB2 })),
-                Network.Variables({ sent, sentTrans, sent2, sentTrans2 })
+                VariablesImpl(
+                    Host.Spec.ComponentA.Variables(
+                        Host.Spec.ComponentA.VariablesImpl.VariablesImpl([Host.Spec.ComponentA.Network.Host.Variables([req], [resp])]), 
+                        Host.Spec.ComponentA.Network.Variables([ sentA, sentA2 ])),
+                    Host.Spec.ComponentB.Variables(
+                        Host.Spec.ComponentB.VariablesImpl.VariablesImpl([Host.Spec.ComponentB.Network.Host.Variables([req], [resp])]), 
+                        Host.Spec.ComponentB.Network.Variables([ sentB, sentB2 ]))),
+                Network.Variables(behavior[2].network.sentMsgs + msgOps.send + msgOps.send_trans)
             )];
-            assert Spec.DSA.Network.Host.ReceiveResponse(c.dsA.hosts[0], behavior[2].dsA.hosts[0], behavior[3].dsA.hosts[0], eventA, msgOpsA);
-            assert Spec.DSA.NextStep(c.dsA, behavior[2].dsA, behavior[3].dsA, eventA, Spec.DSA.HostActionStep(0, msgOpsA));
-            assert UnwrapEventA(event) == eventA;
+            assert Host.Spec.ComponentA.Network.Host.ReceiveResponse(c.c.componentA.c.hosts[0], behavior[2].v.componentA.v.hosts[0], behavior[3].v.componentA.v.hosts[0], eventA, msgOpsA);
+            assert Host.Spec.ComponentA.Action(c.c.componentA, behavior[2].v.componentA, behavior[3].v.componentA, eventA, msgOpsA, Host.Spec.ComponentA.HostActionStep(0));
             assert UnwrapMessageOpsA(msgOps) == msgOpsA;
-            assert DSAAction(c, behavior[2], behavior[3], event, msgOps);
-            assert DSAction(c, behavior[2], behavior[3], event, msgOps);
-            assert NextStep(c, behavior[2], behavior[3], event, DSActionStep(msgOps));
-            assert Next(c, behavior[2], behavior[3], event);
+            assert ComponentAAction(c, behavior[2], behavior[3], event, msgOps);
+            assert ComponentAction(c, behavior[2], behavior[3], event, msgOps);
+            assert Action(c, behavior[2], behavior[3], event, Host.MessageOps.MessageOps(msgOps.recv, msgOps.send + msgOps.send_trans), ComponentActionStep(msgOps));
+            assert NextStep(c, behavior[2], behavior[3], Some(event), Step.ActionStep(ComponentActionStep(msgOps), Host.MessageOps.MessageOps(msgOps.recv, msgOps.send + msgOps.send_trans)));
+            assert Next(c, behavior[2], behavior[3], Some(event));
         }
 }

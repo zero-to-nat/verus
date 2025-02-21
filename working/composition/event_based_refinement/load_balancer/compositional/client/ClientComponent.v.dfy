@@ -1,7 +1,12 @@
-include "../shared/RefinementObligation.t.dfy"
-include "Network.v.dfy"
+include "../shared/AbstractSingleComponent.t.dfy"
+include "../shared/AbstractNetwork.t.dfy"
+include "ClientHost.v.dfy"
 
-module ClientDistributedSystem refines RefinementTheorem {
+module ClientNetwork refines AbstractNetwork {
+    import opened Host = ClientHost
+}
+
+module ClientComponentDef refines AbstractSingleComponent {
     import opened Network = ClientNetwork
 
     ghost predicate ValidNext(c: Constants, v: Variables, v': Variables)
@@ -16,8 +21,8 @@ module ClientDistributedSystem refines RefinementTheorem {
         && Init(c, behavior[0])
         && (forall i:nat | 0 <= i < |behavior|-1 :: ValidNext(c, behavior[i], behavior[i+1]))
         && behavior[|behavior|-1].WF(c) 
-        && |behavior[|behavior|-1].hosts[0].requests| == 1
-        && |behavior[|behavior|-1].hosts[0].responses| == 0
+        && |behavior[|behavior|-1].v.hosts[0].requests| == 1
+        && |behavior[|behavior|-1].v.hosts[0].responses| == 0
     }
 
     lemma NonTriviality_Part1(c: Constants) returns (behavior: seq<Variables>)
@@ -25,23 +30,23 @@ module ClientDistributedSystem refines RefinementTheorem {
         ensures NonTriviality_Part1Spec(c, behavior)
     {
         behavior := [Variables.Variables(
-            [
+            VariablesImpl([
                 Host.Variables([], [])
-            ],
-            Network.Variables({})
+            ]),
+            Network.Variables([])
         )];
 
         var clientReq := ServiceRequest(0, (4, 5));
         var sent := Host.ClientRequest(clientReq);
-        var msgOps := Host.MessageOps(None, Some(sent));
+        var msgOps := Host.MessageOps([], [sent]);
         behavior := behavior + [Variables.Variables(
-            [
+            VariablesImpl([
                 Host.Variables([clientReq], [])
-            ],
-            Network.Variables({ sent })
+            ]),
+            Network.Variables([sent])
         )];
-        assert Host.SendRequest(c.hosts[0], behavior[0].hosts[0], behavior[1].hosts[0], Some(Host.Spec.SendRequest), msgOps);
-        assert NextStep(c, behavior[0], behavior[1], Some(Host.Spec.SendRequest), HostActionStep(0, msgOps));
+        assert Host.SendRequest(c.c.hosts[0], behavior[0].v.hosts[0], behavior[1].v.hosts[0], Host.Spec.SendRequest, msgOps);
+        assert NextStep(c, behavior[0], behavior[1], Some(Host.Spec.SendRequest), ActionStep(HostActionStep(0), msgOps));
         assert Next(c, behavior[0], behavior[1], Some(Host.Spec.SendRequest));
     }
 
@@ -54,11 +59,8 @@ module ClientDistributedSystem refines RefinementTheorem {
     ghost predicate CorrectClientResponse(c: Constants, part2: seq<Variables>, i: nat, request: ServiceRequest<(int, int)>, msgOps: Host.MessageOps)
         requires |part2| > i + 1
     {
-        && NextStep(c, part2[i], part2[i+1], None, HostActionStep(0, msgOps)) 
-        && msgOps.send.Some?
-        && msgOps.send.value.ClientResponse?
-        && msgOps.send.value.response.seqNo == request.seqNo
-        && msgOps.send.value.response.val == request.val.0 + request.val.1
+        && NextStep(c, part2[i], part2[i+1], None, ActionStep(HostActionStep(0), msgOps))
+        && msgOps.send == [Host.ClientResponse(ServiceResponse(request.seqNo, request.val.0 + request.val.1))]
     }
 
     ghost predicate NonTriviality_Part2Spec(c: Constants, part1: seq<Variables>, part2: seq<Variables>)
@@ -68,8 +70,8 @@ module ClientDistributedSystem refines RefinementTheorem {
         && part2[0..|part1|] == part1
         && 0 < |part2[|part1|..]|
         && (forall i:nat | |part1| <= i < |part2| - 1 :: Next(c, part2[i], part2[i+1], None))
-        && (forall i:nat | |part1| <= i < |part2| - 1 :: part2[i].hosts == part1[|part1|-1].hosts)
-        && (ExistsCorrectClientResponse(c, part2, |part2| - 2, part1[|part1|-1].hosts[0].requests[0]))
+        && (forall i:nat | |part1| <= i < |part2| - 1 :: part2[i].v.hosts == part1[|part1|-1].v.hosts)
+        && (ExistsCorrectClientResponse(c, part2, |part2| - 2, part1[|part1|-1].v.hosts[0].requests[0]))
     }
 
     ghost predicate NonTriviality_Part3Spec(c: Constants, part1: seq<Variables>, part2: seq<Variables>, part3: seq<Variables>)
@@ -80,8 +82,8 @@ module ClientDistributedSystem refines RefinementTheorem {
         && 0 < |part3[|part2|..]|
         && (forall i:nat | |part2| <= i < |part3|-1 :: ValidNext(c, part3[i], part3[i+1]))
         && part3[|part3|-1].WF(c)
-        && |part3[|part3|-1].hosts[0].requests| == 1
-        && |part3[|part3|-1].hosts[0].responses| == 1
+        && |part3[|part3|-1].v.hosts[0].requests| == 1
+        && |part3[|part3|-1].v.hosts[0].responses| == 1
         //&& part3[|[part3]|-1].hosts[0].responses[0].seqNo == part3[|part3|-1].hosts[0].requests[0].seqNo
         //&& part3[|[part3]|-1].hosts[0].responses[0].val == part3[|part3|-1].hosts[0].requests[0].val.0 + part3[|part3|-1].hosts[0].requests[0].val.1
     }
@@ -93,18 +95,19 @@ module ClientDistributedSystem refines RefinementTheorem {
     {
         behavior := part2;
 
-        var msgOps :| CorrectClientResponse(c, part2, |part2| - 2, part2[|part2|-1].hosts[0].requests[0], msgOps);
-        var recv := msgOps.send.value;
-        msgOps := Host.MessageOps(Some(recv), None);
-        var clientResp := recv.response;
+        var msgOps :| CorrectClientResponse(c, part2, |part2| - 2, part2[|part2|-1].v.hosts[0].requests[0], msgOps);
+        var recv := msgOps.send;
+        msgOps := Host.MessageOps(recv, []);
+        var clientReq := part2[|part2|-1].v.hosts[0].requests[0];
+        var clientResp := ServiceResponse(clientReq.seqNo, clientReq.val.0 + clientReq.val.1);
         behavior := behavior + [Variables.Variables(
-            [
-                Host.Variables(part2[|part2|-1].hosts[0].requests, [clientResp])
-            ],
+            VariablesImpl([
+                Host.Variables(part2[|part2|-1].v.hosts[0].requests, [clientResp])
+            ]),
             part2[|part2|-1].network
         )];
         var i := |behavior| - 2;
-        assert Host.ReceiveResponse(c.hosts[0], behavior[i].hosts[0], behavior[i+1].hosts[0], Some(Host.Spec.ReceiveResponse), msgOps);
-        assert NextStep(c, behavior[i], behavior[i+1], Some(Host.Spec.ReceiveResponse), HostActionStep(0, msgOps));
+        assert Host.ReceiveResponse(c.c.hosts[0], behavior[i].v.hosts[0], behavior[i+1].v.hosts[0], Host.Spec.ReceiveResponse, msgOps);
+        assert NextStep(c, behavior[i], behavior[i+1], Some(Host.Spec.ReceiveResponse), ActionStep(HostActionStep(0), msgOps));
     }
 }

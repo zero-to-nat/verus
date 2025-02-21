@@ -1,7 +1,6 @@
-include "../shared/RefinementObligation.t.dfy"
-include "DistributedSystem.v.dfy"
+include "ClientComponent.v.dfy"
 
-module ClientRefinementProof refines ClientDistributedSystem {
+module ClientComponent refines ClientComponentDef {
 
     ghost function ConstantsAbstraction(c: Constants) : Network.Host.Spec.Constants
 //        requires c.WF()
@@ -33,8 +32,8 @@ module ClientRefinementProof refines ClientDistributedSystem {
 //        requires v.WF(c)
     {
         Network.Host.Spec.Variables(
-            MapClientRequests(v.hosts[0].requests), 
-            MapClientResponses(v.hosts[0].responses)
+            MapClientRequests(v.v.hosts[0].requests), 
+            MapClientResponses(v.v.hosts[0].responses)
         )
     }
 
@@ -44,30 +43,18 @@ module ClientRefinementProof refines ClientDistributedSystem {
         forall msg :: 
             && msg in v.network.sentMsgs 
             && msg.ClientRequest? ==> 
-            && |v.hosts[0].requests| > msg.request.seqNo 
-            && v.hosts[0].requests[msg.request.seqNo] == msg.request
-    }
-
-    ghost predicate Inv_ClientResponseMsg(c: Constants, v: Variables) 
-        requires v.WF(c)
-    {
-        forall msg :: 
-            && msg in v.network.sentMsgs 
-            && msg.ClientResponse? ==> 
-            && |v.hosts[0].requests| > msg.response.seqNo 
-            && v.hosts[0].requests[msg.response.seqNo].val.0 + v.hosts[0].requests[msg.response.seqNo].val.1 == msg.response.val
+            && |v.v.hosts[0].requests| > msg.request.seqNo 
+            && v.v.hosts[0].requests[msg.request.seqNo] == msg.request
     }
 
     ghost predicate Inv(c: Constants, v: Variables)
     {
         && v.WF(c)
         && Inv_ClientRequestMsg(c, v)
-        && Inv_ClientResponseMsg(c, v)
    }
 
     lemma RefinementInit(c: Constants, v: Variables)
 //        requires Init(c, v)
-//        ensures Inv(c, v)
 //        ensures Spec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
     {
     }
@@ -75,28 +62,19 @@ module ClientRefinementProof refines ClientDistributedSystem {
     lemma InvInductiveBase(c: Constants, v: Variables)
         // requires Init(c, v)
         // ensures Inv(c, v)
+    {}
 
     lemma InvInductiveNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>)
         // requires Next(c, v, v', evt)
         // requires Inv(c, v)
         // ensures Inv(c, v')
-
-    // hmmm??
+    {}
 
     lemma RefinementNext(c: Constants, v: Variables, v': Variables, evt: Option<Network.Host.Spec.Event>)
 //        requires Next(c, v, v', evt)
 //        requires Inv(c, v)
-//        ensures Inv(c, v') 
 //        ensures Spec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), evt) || (VariablesAbstraction(c, v) == VariablesAbstraction(c, v') && evt == NoOp)
     {
-        if (evt.None?) {
-
-        } else {
-            if (evt.value.SendRequest?) {
-
-            } else {
-                // cant show that ReceiveResponse is always safe...
-            }
-        }
+        InvInductiveNext(c, v, v', evt);
     }
 }

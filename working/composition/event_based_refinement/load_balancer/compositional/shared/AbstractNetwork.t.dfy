@@ -1,5 +1,5 @@
 include "Types.t.dfy"
-include "Host.t.dfy"
+include "AbstractHost.t.dfy"
 
 // copied from chapter 5 exercise 1
 abstract module AbstractNetwork {
@@ -12,19 +12,18 @@ abstract module AbstractNetwork {
   // allow it to be delivered over and over.
   // (We don't have packet headers, so duplication, besides being realistic,
   // also doubles as how multiple parties can hear the message.)
-  datatype Variables = Variables(sentMsgs:set<Message>)
+  datatype Variables = Variables(sentMsgs:seq<Message>)
 
   ghost predicate Init(c: Constants, v: Variables)
   {
-    && v.sentMsgs == {}
+    && v.sentMsgs == []
   }
 
   ghost predicate Next(c: Constants, v: Variables, v': Variables, msgOps: Host.MessageOps)
   {
     // Only allow receipt of a message if we've seen it has been sent.
-    && (msgOps.recv.Some? ==> msgOps.recv.value in v.sentMsgs)
+    && (forall m :: m in msgOps.recv ==> m in v.sentMsgs)
     // Record the sent message, if there was one.
-    && v'.sentMsgs ==
-      v.sentMsgs + if msgOps.send.None? then {} else { msgOps.send.value }
+    && v'.sentMsgs == v.sentMsgs + msgOps.send
   }
 }
