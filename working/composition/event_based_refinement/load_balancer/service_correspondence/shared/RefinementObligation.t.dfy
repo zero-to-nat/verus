@@ -7,73 +7,73 @@ abstract module RefinementTheorem refines AbstractDistributedComponent {
     ghost function VariablesAbstraction(c: Constants, v: Variables) : Host.Spec.Variables
         requires v.WF(c)
 
-    ghost function ServiceRequestsAbstraction(msgs: set<seq<byte>>) : set<Host.Spec.ServiceRequest>
-        ensures forall bytes :: bytes in msgs && Host.Spec.ParseServiceRequest(bytes).Some? ==> Host.Spec.ParseServiceRequest(bytes).value in ServiceRequestsAbstraction(msgs)
-        ensures forall m :: m in ServiceRequestsAbstraction(msgs) ==> exists bytes :: bytes in msgs && Host.Spec.ParseServiceRequest(bytes).Some? && m == Host.Spec.ParseServiceRequest(bytes).value
+    ghost function ServiceRequestsAbstraction(pkts: set<Message<seq<byte>>>) : set<Message<Host.Spec.ServiceRequest>>
+        ensures forall bytes :: bytes in pkts && Host.Spec.ParseServiceRequest(bytes.msg).Some? ==> Message(bytes.src, bytes.dest, Host.Spec.ParseServiceRequest(bytes.msg).value) in ServiceRequestsAbstraction(pkts)
+        ensures forall m :: m in ServiceRequestsAbstraction(pkts) ==> exists bytes :: bytes in pkts && Host.Spec.ParseServiceRequest(bytes.msg).Some? && m == Message(bytes.src, bytes.dest, Host.Spec.ParseServiceRequest(bytes.msg).value)
     {
-        if (msgs == {}) then 
+        if (pkts == {}) then 
             {}
         else 
-            assert exists m :: m in msgs;
-            var m :| m in msgs;
-            var req := Host.Spec.ParseServiceRequest(m);
+            assert exists bytes :: bytes in pkts;
+            var bytes :| bytes in pkts;
+            var req := Host.Spec.ParseServiceRequest(bytes.msg);
             if (req != None) then
-                {req.value} + ServiceRequestsAbstraction(msgs - {m})
+                {Message(bytes.src, bytes.dest, req.value)} + ServiceRequestsAbstraction(pkts - {bytes})
             else
-                ServiceRequestsAbstraction(msgs - {m})
+                ServiceRequestsAbstraction(pkts - {bytes})
     }
 
-    lemma ServiceRequestsAbstractionLemma(msgs: set<seq<byte>>)
-        ensures forall m :: Host.Spec.MarshallServiceRequest(m) in msgs <==> m in ServiceRequestsAbstraction(msgs)
+    lemma ServiceRequestsAbstractionLemma(pkts: set<Message<seq<byte>>>)
+        ensures forall m : Message<Host.Spec.ServiceRequest> :: Message(m.src, m.dest, Host.Spec.MarshallServiceRequest(m.msg)) in pkts <==> m in ServiceRequestsAbstraction(pkts)
     {
-        forall m | Host.Spec.MarshallServiceRequest(m) in msgs 
-            ensures m in ServiceRequestsAbstraction(msgs)
+        forall m : Message<Host.Spec.ServiceRequest> | Message(m.src, m.dest, Host.Spec.MarshallServiceRequest(m.msg)) in pkts
+            ensures m in ServiceRequestsAbstraction(pkts)
         {
             Host.Spec.MarshallParseInverse();
-            assert Host.Spec.ParseServiceRequest(Host.Spec.MarshallServiceRequest(m)).Some? && Host.Spec.ParseServiceRequest(Host.Spec.MarshallServiceRequest(m)).value == m;
-            assert m in ServiceRequestsAbstraction(msgs);
+            assert Host.Spec.ParseServiceRequest(Host.Spec.MarshallServiceRequest(m.msg)).Some? && Host.Spec.ParseServiceRequest(Host.Spec.MarshallServiceRequest(m.msg)).value == m.msg;
+            assert m in ServiceRequestsAbstraction(pkts);
         }
-        forall m | m in ServiceRequestsAbstraction(msgs) 
-            ensures Host.Spec.MarshallServiceRequest(m) in msgs
+        forall m : Message<Host.Spec.ServiceRequest> | m in ServiceRequestsAbstraction(pkts) 
+            ensures Message(m.src, m.dest, Host.Spec.MarshallServiceRequest(m.msg)) in pkts
         {
-            var bytes :| bytes in msgs && Host.Spec.ParseServiceRequest(bytes).Some? && m == Host.Spec.ParseServiceRequest(bytes).value;
+            var bytes :| bytes in pkts && Host.Spec.ParseServiceRequest(bytes.msg).Some? && m.msg == Host.Spec.ParseServiceRequest(bytes.msg).value;
             Host.Spec.MarshallParseInverse();
-            assert Host.Spec.MarshallServiceRequest(m) == bytes;
+            assert Host.Spec.MarshallServiceRequest(m.msg) == bytes.msg;
         }
     }
 
-    ghost function ServiceRepliesAbstraction(msgs: set<seq<byte>>) : set<Host.Spec.ServiceReply>
-        ensures forall bytes :: bytes in msgs && Host.Spec.ParseServiceReply(bytes).Some? ==> Host.Spec.ParseServiceReply(bytes).value in ServiceRepliesAbstraction(msgs)
-        ensures forall m :: m in ServiceRepliesAbstraction(msgs) ==> exists bytes :: bytes in msgs && Host.Spec.ParseServiceReply(bytes).Some? && m == Host.Spec.ParseServiceReply(bytes).value
+    ghost function ServiceRepliesAbstraction(pkts: set<Message<seq<byte>>>) : set<Message<Host.Spec.ServiceReply>>
+        ensures forall bytes :: bytes in pkts && Host.Spec.ParseServiceReply(bytes.msg).Some? ==> Message(bytes.src, bytes.dest, Host.Spec.ParseServiceReply(bytes.msg).value) in ServiceRepliesAbstraction(pkts)
+        ensures forall m :: m in ServiceRepliesAbstraction(pkts) ==> exists bytes :: bytes in pkts && Host.Spec.ParseServiceReply(bytes.msg).Some? && m == Message(bytes.src, bytes.dest, Host.Spec.ParseServiceReply(bytes.msg).value)
     {
-        if (msgs == {}) then 
+        if (pkts == {}) then 
             {}
         else 
-            assert exists m :: m in msgs;
-            var m :| m in msgs;
-            var repl := Host.Spec.ParseServiceReply(m);
-            if (repl != None) then
-                {repl.value} + ServiceRepliesAbstraction(msgs - {m})
+            assert exists bytes :: bytes in pkts;
+            var bytes :| bytes in pkts;
+            var req := Host.Spec.ParseServiceReply(bytes.msg);
+            if (req != None) then
+                {Message(bytes.src, bytes.dest, req.value)} + ServiceRepliesAbstraction(pkts - {bytes})
             else
-                ServiceRepliesAbstraction(msgs - {m})
+                ServiceRepliesAbstraction(pkts - {bytes})
     }
 
-    lemma ServiceRepliesAbstractionLemma(msgs: set<seq<byte>>)
-        ensures forall m :: Host.Spec.MarshallServiceReply(m) in msgs <==> m in ServiceRepliesAbstraction(msgs)
+    lemma ServiceRepliesAbstractionLemma(pkts: set<Message<seq<byte>>>)
+        ensures forall m : Message<Host.Spec.ServiceReply> :: Message(m.src, m.dest, Host.Spec.MarshallServiceReply(m.msg)) in pkts <==> m in ServiceRepliesAbstraction(pkts)
     {
-        forall m | Host.Spec.MarshallServiceReply(m) in msgs 
-            ensures m in ServiceRepliesAbstraction(msgs)
+        forall m : Message<Host.Spec.ServiceReply> | Message(m.src, m.dest, Host.Spec.MarshallServiceReply(m.msg)) in pkts
+            ensures m in ServiceRepliesAbstraction(pkts)
         {
             Host.Spec.MarshallParseInverse();
-            assert Host.Spec.ParseServiceReply(Host.Spec.MarshallServiceReply(m)).Some? && Host.Spec.ParseServiceReply(Host.Spec.MarshallServiceReply(m)).value == m;
-            assert m in ServiceRepliesAbstraction(msgs);
+            assert Host.Spec.ParseServiceReply(Host.Spec.MarshallServiceReply(m.msg)).Some? && Host.Spec.ParseServiceReply(Host.Spec.MarshallServiceReply(m.msg)).value == m.msg;
+            assert m in ServiceRepliesAbstraction(pkts);
         }
-        forall m | m in ServiceRepliesAbstraction(msgs) 
-            ensures Host.Spec.MarshallServiceReply(m) in msgs
+        forall m : Message<Host.Spec.ServiceReply> | m in ServiceRepliesAbstraction(pkts) 
+            ensures Message(m.src, m.dest, Host.Spec.MarshallServiceReply(m.msg)) in pkts
         {
-            var bytes :| bytes in msgs && Host.Spec.ParseServiceReply(bytes).Some? && m == Host.Spec.ParseServiceReply(bytes).value;
+            var bytes :| bytes in pkts && Host.Spec.ParseServiceReply(bytes.msg).Some? && m.msg == Host.Spec.ParseServiceReply(bytes.msg).value;
             Host.Spec.MarshallParseInverse();
-            assert Host.Spec.MarshallServiceReply(m) == bytes;
+            assert Host.Spec.MarshallServiceReply(m.msg) == bytes.msg;
         }
     }
 

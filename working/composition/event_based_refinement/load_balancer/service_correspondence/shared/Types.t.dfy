@@ -6,5 +6,7 @@ module Types {
 
     newtype{:nativeType "byte"} byte = i:int | 0 <= i < 0x100
 
-    datatype MessageOps = MessageOps(recv: set<seq<byte>>, send: set<seq<byte>>)
+    datatype Message<MessageType> = Message(src: ClientId, dest: ClientId, msg: MessageType)
+
+    datatype MessageOps = MessageOps(recv: set<Message<seq<byte>>>, send: set<Message<seq<byte>>>)
 }

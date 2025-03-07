@@ -10,7 +10,7 @@ abstract module AbstractServiceSpec {
     type Variables
 
     ghost predicate Init(c: Constants, v: Variables)
-    ghost predicate Next(c: Constants, v: Variables, v': Variables, requests: set<ServiceRequest>, replies: set<ServiceReply>)
+    ghost predicate Next(c: Constants, v: Variables, v': Variables, requests: set<Message<ServiceRequest>>, replies: set<Message<ServiceReply>>)
 
     ghost function MarshallServiceRequest(request: ServiceRequest): seq<byte>
     ghost function MarshallServiceReply(reply: ServiceReply): seq<byte>

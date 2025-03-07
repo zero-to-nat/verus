@@ -38,7 +38,7 @@ abstract module AbstractDistributedComponent {
         && 0 <= hostId < |v.hosts|
         && Host.Next(c.hosts[hostId], v.hosts[hostId], v'.hosts[hostId], msgOps)
         && (forall i :: 0 <= i < |v.hosts| && i != hostId ==> v.hosts[i] == v'.hosts[i])
-        && Network.Next(c.network, v.network, v'.network, msgOps)
+        && Network.Next(c.network, v.network, v'.network, msgOps, hostId)
     }
 
     datatype Step =
