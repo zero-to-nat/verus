@@ -3,6 +3,7 @@ include "AbstractNetwork.t.dfy"
 abstract module AbstractDistributedComponent {
     import opened Types
     import opened Network : AbstractNetwork
+    import Host : AbstractHost
 
     datatype Constants = Constants(
         hosts: seq<Host.Constants>,

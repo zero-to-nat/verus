@@ -13,18 +13,18 @@ module MultiplicationServiceSpec refines AbstractServiceSpec {
         && |v.replies| == 0
     }
 
-    ghost predicate ReceiveRequest(c: Constants, v: Variables, v': Variables, requests: set<Message<ServiceRequest>>, replies: set<Message<ServiceReply>>) {
-        exists request ::
-            && requests == {request} 
-            && replies == {}
+    ghost predicate ReceiveRequest(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
+        exists request: Message<ServiceRequest> ::
+            && msgOps.recv == {Message(request.src, request.dest, MarshallServiceRequest(request.msg))} 
+            && msgOps.send == {}
             && v'.requests == v.requests + {request}
             && v'.replies == v.replies
     }
 
-    ghost predicate SendResponse(c: Constants, v: Variables, v': Variables, requests: set<Message<ServiceRequest>>, replies: set<Message<ServiceReply>>) {
-        exists request, reply ::
-            && requests == {} 
-            && replies == {reply}
+    ghost predicate SendResponse(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
+        exists request: Message<ServiceRequest>, reply: Message<ServiceReply> ::
+            && msgOps.recv == {} 
+            && msgOps.send == {Message(reply.src, reply.dest, MarshallServiceReply(reply.msg))}
             && v'.requests == v.requests
             && request in v.requests
             && v'.replies == v.replies + {reply}
@@ -32,8 +32,8 @@ module MultiplicationServiceSpec refines AbstractServiceSpec {
             && reply.dest == request.src
     }
 
-    ghost predicate Next(c: Constants, v: Variables, v': Variables, requests: set<Message<ServiceRequest>>, replies: set<Message<ServiceReply>>) {
-        || ReceiveRequest(c, v, v', requests, replies)
-        || SendResponse(c, v, v', requests, replies)
+    ghost predicate Next(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
+        || ReceiveRequest(c, v, v', msgOps)
+        || SendResponse(c, v, v', msgOps)
     }
 }

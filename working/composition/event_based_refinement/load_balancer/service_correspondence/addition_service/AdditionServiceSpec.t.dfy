@@ -1,7 +1,8 @@
 include "../shared/AbstractServiceSpec.t.dfy"
 
 module AdditionServiceSpec refines AbstractServiceSpec {
-    datatype Constants = Constants
+    
+    datatype Constants = Constants(idSelf: ClientId)
 
     datatype ServiceRequest = AddRequest(seqNo: nat, x: int, y: int)
     datatype ServiceReply = AddReply(seqNo: nat, sum: int)
@@ -13,36 +14,17 @@ module AdditionServiceSpec refines AbstractServiceSpec {
         && |v.replies| == 0
     }
 
-    ghost predicate Add(c: Constants, v: Variables, v': Variables, requests: set<Message<ServiceRequest>>, replies: set<Message<ServiceReply>>) {
-        exists request, reply ::
-            && requests == {request} 
-            && replies == {reply}
+    ghost predicate Add(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
+        exists request : Message<ServiceRequest>, reply : Message<ServiceReply> ::
+            && msgOps.recv == {Message(request.src, request.dest, MarshallServiceRequest(request.msg))} 
+            && msgOps.send == {Message(reply.src, reply.dest, MarshallServiceReply(reply.msg))}
             && v'.requests == v.requests + {request}
             && v'.replies == v.replies + {reply}
             && reply.msg == AddReply(request.msg.seqNo, request.msg.x + request.msg.y)
             && reply.dest == request.src
     }
 
-    ghost predicate Next(c: Constants, v: Variables, v': Variables, requests: set<Message<ServiceRequest>>, replies: set<Message<ServiceReply>>) {
-        || Add(c, v, v', requests, replies)
+    ghost predicate Next(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
+        || Add(c, v, v', msgOps)
     }
-
-    // this should be an inductive invariant over the system execution
-    // actually it seems like two invariants:
-    // (1) any packets on the network of type ServiceReply were actualy sent by this service (and correspondingly for requests received by this service). 
-    // - this seems like it is an inductive invariant over distributed executions in our system model? and so it can be factored out
-    // (2) inductive invariants over executions of the service itself (i.e., replies must contain the sum of a corresponding request)
-    lemma ServiceCorrespondence_NaiveVersion(sentPackets: set<Message<seq<byte>>>) 
-        ensures forall pkt :: 
-            && pkt in sentPackets
-            && ParseServiceReply(pkt.msg).Some? ==>
-                exists v: Variables, request: Message<ServiceRequest> :: 
-                && Message(pkt.src, pkt.dest, ParseServiceReply(pkt.msg).value) in v.replies // this is (1)
-                && request in v.requests 
-                && ParseServiceReply(pkt.msg).value == AddReply(request.msg.seqNo, request.msg.x + request.msg.y) // this is (2)
-                && request.src == pkt.dest
-                && request.dest == pkt.src
-        ensures forall v: Variables, request: Message<ServiceRequest> ::
-            && request in v.requests ==>
-            && Message(request.src, request.dest, MarshallServiceRequest(request.msg)) in sentPackets // this is (1)
 }

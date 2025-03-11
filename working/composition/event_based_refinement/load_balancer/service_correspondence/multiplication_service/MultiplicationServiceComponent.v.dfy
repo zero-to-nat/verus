@@ -2,16 +2,16 @@ include "MultiplicationServiceHost.v.dfy"
 include "../addition_service/AdditionServiceSpec.t.dfy"
 include "../shared/AbstractNetwork.t.dfy"
 include "../shared/AbstractDistributedComponent.t.dfy"
-include "../shared/RefinementObligation.t.dfy"
 
 module Network refines AbstractNetwork {
-    import opened Host = MultiplicationServiceHost
 }
 
-module MultiplicationServiceComponent refines RefinementTheorem {
+module MultiplicationServiceComponent refines AbstractDistributedComponent {
     import opened Network = Network
+    import Host = MultiplicationServiceHost
     import AddSvc = AdditionServiceSpec
 
+    /*
     ghost function ConstantsAbstraction(c: Constants) : Host.Spec.Constants
         //requires c.WF()
     {
@@ -282,4 +282,5 @@ module MultiplicationServiceComponent refines RefinementTheorem {
             assert Host.Spec.SendResponse(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), ServiceRequestsAbstraction(msgOps.recv), ServiceRepliesAbstraction(msgOps.send));
         }
     }
+    */
 }

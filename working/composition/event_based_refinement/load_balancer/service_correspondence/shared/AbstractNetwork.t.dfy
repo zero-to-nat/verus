@@ -3,7 +3,6 @@ include "AbstractHost.t.dfy"
 
 abstract module AbstractNetwork {
   import opened Types
-  import opened Host : AbstractHost
 
   datatype Constants = Constants  // no constants for network
 
