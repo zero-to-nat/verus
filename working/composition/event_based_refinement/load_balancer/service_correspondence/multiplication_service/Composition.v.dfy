@@ -1,5 +1,5 @@
 include "MultiplicationServiceComponent.v.dfy"
-include "../addition_service/AdditionServiceSpec.t.dfy"
+include "../addition_service/AdditionServiceSM.t.dfy"
 include "../shared/AbstractNetwork.t.dfy"
 
 module ComposedNetwork refines AbstractNetwork {
@@ -9,7 +9,7 @@ module MultiplicationService {
     import opened Types
     import opened ComposedNetwork = Network
     import MultSvc = MultiplicationServiceComponent
-    import AddSvc = AdditionServiceSpec
+    import AddSvc = AdditionServiceSM
 
     datatype Constants = Constants(
         multSvc: MultSvc.Constants,
@@ -19,8 +19,9 @@ module MultiplicationService {
         ghost predicate WF() 
         {
             && multSvc.WF()
-            //&& addSvc.WF() // todo - should add well-formedness for spec
+            //&& addSvc.WF() // todo - should add well-formedness for spec ?
             && multSvc.hosts[0].idSelf != addSvc.idSelf
+            && multSvc.hosts[0].idAdditionService == addSvc.idSelf
         }
     }
 

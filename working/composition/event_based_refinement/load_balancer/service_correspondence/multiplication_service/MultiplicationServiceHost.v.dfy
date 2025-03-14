@@ -1,12 +1,12 @@
-include "MultiplicationServiceSpec.t.dfy"
-include "../addition_service/AdditionServiceSpec.t.dfy"
+include "MultiplicationServiceSM.t.dfy"
+include "../addition_service/AdditionServiceSM.t.dfy"
 include "../shared/AbstractHost.t.dfy"
 
 module MultiplicationServiceHost refines AbstractHost {
-    import opened Spec = MultiplicationServiceSpec
-    import AddSvc = AdditionServiceSpec
+    import opened Service = MultiplicationServiceSM
+    import AdditionService = AdditionServiceSM
 
-    datatype Constants = Constants(idSelf: ClientId, idAddSvc: ClientId)
+    datatype Constants = Constants(idSelf: ClientId, idAdditionService: ClientId)
     {
         ghost predicate WF() {
             true
@@ -19,7 +19,7 @@ module MultiplicationServiceHost refines AbstractHost {
         nextSeqNo: SeqNo, // next unused sequence number for addition requests
         seqNoAssgn: map<SeqNo, Message<ServiceRequest>>, // maps addition request seq number to (original) multiplication service request
         firstSeqNo: map<Message<ServiceRequest>, SeqNo>, // maps multiplication service request to first seq no for corresponding addition requests
-        intermediateResults: map<Message<ServiceRequest>, seq<Message<AddSvc.ServiceReply>>>) // maps multiplication service request to addition results so far
+        intermediateResults: map<Message<ServiceRequest>, seq<Message<AdditionService.ServiceReply>>>) // maps multiplication service request to addition results so far
     {
         ghost predicate WF(c: Constants) {
             && |requests| == |intermediateResults|
@@ -33,6 +33,7 @@ module MultiplicationServiceHost refines AbstractHost {
                 && firstSeqNo[request] <= seqNo < firstSeqNo[request] + request.msg.x ==>
                 && seqNo in seqNoAssgn
                 && seqNoAssgn[seqNo] == request)
+            && (forall seqNo :: seqNo in seqNoAssgn ==> seqNo < nextSeqNo)
         }
     }
 
@@ -41,7 +42,7 @@ module MultiplicationServiceHost refines AbstractHost {
         && |c| == 1
         && (forall i :: 0 <= i < |c| ==> 
             && c[i].idSelf == i
-            && |c| <= c[i].idAddSvc)
+            && |c| <= c[i].idAdditionService)
     }
 
     ghost predicate GroupWFVariables(c: seq<Constants>, v: seq<Variables>)
@@ -64,7 +65,9 @@ module MultiplicationServiceHost refines AbstractHost {
     {
         && v.WF(c)
         && v'.WF(c)
+        && request !in v.requests
         && v'.requests == v.requests + {request}
+        && request.msg.x > 0 // todo, support 0 case!
         && (forall seqNo :: v.nextSeqNo <= seqNo < v.nextSeqNo + request.msg.x ==>
             && seqNo in v'.seqNoAssgn
             && v'.seqNoAssgn[seqNo] == request
@@ -78,7 +81,7 @@ module MultiplicationServiceHost refines AbstractHost {
         && v'.nextSeqNo == v.nextSeqNo + request.msg.x
         && v'.replies == v.replies
         && msgOps.recv == {Message(request.src, request.dest, MarshallServiceRequest(request.msg))}
-        && msgOps.send == {Message(c.idSelf, c.idAddSvc, AddSvc.MarshallServiceRequest(AddSvc.AddRequest(v.nextSeqNo, 0, request.msg.y)))}
+        && msgOps.send == {Message(c.idSelf, c.idAdditionService, AdditionService.MarshallServiceRequest(AdditionService.AddRequest(v.nextSeqNo, 0, request.msg.y)))}
     }
 
     ghost predicate ReceiveRequest(c: Constants, v: Variables, v': Variables, msgOps: MessageOps)
@@ -86,7 +89,7 @@ module MultiplicationServiceHost refines AbstractHost {
         exists request :: ReceiveRequestImpl(c, v, v', msgOps, request)    
     }
 
-    ghost predicate ReceiveIntermediateResponseImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, reply: Message<AddSvc.ServiceReply>)
+    ghost predicate ReceiveIntermediateResponseImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, reply: Message<AdditionService.ServiceReply>)
     {
         && v.WF(c)
         && v'.WF(c)
@@ -99,9 +102,9 @@ module MultiplicationServiceHost refines AbstractHost {
         && reply.msg.seqNo == v.firstSeqNo[v.seqNoAssgn[reply.msg.seqNo]] + |v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo]]|
         && v'.intermediateResults == v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo] := v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo]] + [reply]]
         && reply.msg.seqNo < v.firstSeqNo[v.seqNoAssgn[reply.msg.seqNo]] + v.seqNoAssgn[reply.msg.seqNo].msg.x - 1
-        && msgOps.recv == {Message(reply.src, reply.dest, AddSvc.MarshallServiceReply(reply.msg))}
-        && reply.src == c.idAddSvc
-        && msgOps.send == {Message(c.idSelf, c.idAddSvc, AddSvc.MarshallServiceRequest(AddSvc.AddRequest(reply.msg.seqNo + 1, reply.msg.sum, v.seqNoAssgn[reply.msg.seqNo].msg.y)))}
+        && msgOps.recv == {Message(c.idAdditionService, reply.dest, AdditionService.MarshallServiceReply(reply.msg))}
+        && reply.src == c.idAdditionService
+        && msgOps.send == {Message(c.idSelf, c.idAdditionService, AdditionService.MarshallServiceRequest(AdditionService.AddRequest(reply.msg.seqNo + 1, reply.msg.sum, v.seqNoAssgn[reply.msg.seqNo].msg.y)))}
     }
 
     ghost predicate ReceiveIntermediateResponse(c: Constants, v: Variables, v': Variables, msgOps: MessageOps)
@@ -109,7 +112,7 @@ module MultiplicationServiceHost refines AbstractHost {
         exists reply :: ReceiveIntermediateResponseImpl(c, v, v', msgOps, reply)
     }
 
-    ghost predicate ReceiveFinalResponseImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, reply: Message<AddSvc.ServiceReply>)
+    ghost predicate ReceiveFinalResponseImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, reply: Message<AdditionService.ServiceReply>)
     {
         && v.WF(c)
         && v'.WF(c)
@@ -122,8 +125,8 @@ module MultiplicationServiceHost refines AbstractHost {
         && v'.intermediateResults == v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo] := v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo]] + [reply]]
         && reply.msg.seqNo == v.firstSeqNo[v.seqNoAssgn[reply.msg.seqNo]] + v.seqNoAssgn[reply.msg.seqNo].msg.x - 1
         && v'.replies == v.replies + {Message(c.idSelf, v.seqNoAssgn[reply.msg.seqNo].src, MultiplyReply(v.seqNoAssgn[reply.msg.seqNo].msg.seqNo, reply.msg.sum))}
-        && msgOps.recv == {Message(reply.src, reply.dest, AddSvc.MarshallServiceReply(reply.msg))}
-        && reply.src == c.idAddSvc
+        && msgOps.recv == {Message(reply.src, reply.dest, AdditionService.MarshallServiceReply(reply.msg))}
+        && reply.src == c.idAdditionService
         && msgOps.send == {Message(c.idSelf, v.seqNoAssgn[reply.msg.seqNo].src, MarshallServiceReply(MultiplyReply(v.seqNoAssgn[reply.msg.seqNo].msg.seqNo, reply.msg.sum)))}
     }
 

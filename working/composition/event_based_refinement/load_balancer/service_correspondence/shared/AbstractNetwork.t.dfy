@@ -20,7 +20,7 @@ abstract module AbstractNetwork {
     // Only allow receipt of a message if we've seen it has been sent.
     && (forall m :: m in msgOps.recv ==> m in v.sentMsgs)
     // Record the sent message, if there was one.
-    && v'.sentMsgs == v.sentMsgs + msgOps.send
+    && v'.sentMsgs == v.sentMsgs + msgOps.send // todo -- allow external hosts to send messages
     // only allow received messages on given host
     && (forall recv_msg :: recv_msg in msgOps.recv ==> recv_msg.dest == hostId)
     // only allow sent messages from given host

@@ -1,5 +1,5 @@
 include "MultiplicationServiceHost.v.dfy"
-include "../addition_service/AdditionServiceSpec.t.dfy"
+include "../addition_service/AdditionServiceSM.t.dfy"
 include "../shared/AbstractNetwork.t.dfy"
 include "../shared/AbstractDistributedComponent.t.dfy"
 
@@ -9,7 +9,7 @@ module Network refines AbstractNetwork {
 module MultiplicationServiceComponent refines AbstractDistributedComponent {
     import opened Network = Network
     import Host = MultiplicationServiceHost
-    import AddSvc = AdditionServiceSpec
+    import AdditionService = AdditionServiceSM
 
     /*
     ghost function ConstantsAbstraction(c: Constants) : Host.Spec.Constants

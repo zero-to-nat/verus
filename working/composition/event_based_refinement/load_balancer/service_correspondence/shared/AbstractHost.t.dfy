@@ -1,9 +1,9 @@
 include "Types.t.dfy"
-include "AbstractServiceSpec.t.dfy"
+include "AbstractServiceSM.t.dfy"
 
 abstract module AbstractHost {
     import opened Types
-    import opened Spec: AbstractServiceSpec
+    import opened Service: AbstractServiceSM
 
     type Constants {
         ghost predicate WF()

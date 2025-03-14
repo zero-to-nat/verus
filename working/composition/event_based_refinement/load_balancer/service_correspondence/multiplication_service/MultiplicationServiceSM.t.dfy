@@ -1,6 +1,6 @@
-include "../shared/AbstractServiceSpec.t.dfy"
+include "../shared/AbstractServiceSM.t.dfy"
 
-module MultiplicationServiceSpec refines AbstractServiceSpec {
+module MultiplicationServiceSM refines AbstractServiceSM {
     datatype Constants = Constants
 
     datatype ServiceRequest = MultiplyRequest(seqNo: SeqNo, x: int, y: int)
