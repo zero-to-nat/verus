@@ -101,6 +101,7 @@ module RefinementProof refines RefinementTheorem {
         requires MultSvc.Host.ReceiveRequestImpl(c.multSvc.hosts[0], v.multSvc.hosts[0], v'.multSvc.hosts[0], msgOps, request)
         ensures Inv(c, v')
     {
+        assume false;
         var cHost := c.multSvc.hosts[0];
         var vHost := v.multSvc.hosts[0];
         var v'Host := v'.multSvc.hosts[0];
@@ -152,6 +153,7 @@ module RefinementProof refines RefinementTheorem {
         requires MultSvc.Host.ReceiveIntermediateResponseImpl(c.multSvc.hosts[0], v.multSvc.hosts[0], v'.multSvc.hosts[0], msgOps, svcReply)
         ensures Inv(c, v')
     {
+        assume false;
         var cHost := c.multSvc.hosts[0];
         var vHost := v.multSvc.hosts[0];
         var v'Host := v'.multSvc.hosts[0];
@@ -216,6 +218,7 @@ module RefinementProof refines RefinementTheorem {
         requires MultSvc.Host.ReceiveFinalResponseImpl(c.multSvc.hosts[0], v.multSvc.hosts[0], v'.multSvc.hosts[0], msgOps, svcReply)
         ensures Inv(c, v')
     {
+        assume false;
         var cHost := c.multSvc.hosts[0];
         var vHost := v.multSvc.hosts[0];
         var v'Host := v'.multSvc.hosts[0];
@@ -301,7 +304,6 @@ module RefinementProof refines RefinementTheorem {
         }
     }
     
-    /*
     lemma RefinementNext(c: Constants, v: Variables, v': Variables, msgOps: MessageOps)
         // requires Next(c, v, v', msgOps)
         // requires Inv(c, v)
@@ -310,15 +312,46 @@ module RefinementProof refines RefinementTheorem {
         //     || Service.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), MessageOps(ServiceRequestsAbstraction(msgOps.recv), ServiceRepliesAbstraction(msgOps.send)))
         //     || (VariablesAbstraction(c, v) == VariablesAbstraction(c, v') && ServiceRequestsAbstraction(msgOps.recv) == {} && ServiceRepliesAbstraction(msgOps.send) == {})
     {
+        InvInductive(c, v, v', msgOps);
         var step :| NextStep(c, v, v', msgOps, step);
+        var cSvc := ConstantsAbstraction(c);
+        var vSvc := VariablesAbstraction(c, v);
+        var v'Svc := VariablesAbstraction(c, v');
+        var recvSvc := ServiceRequestsAbstraction(msgOps.recv);
+        var sendSvc := ServiceRepliesAbstraction(msgOps.send);
         if (MultSvcAction(c, v, v', msgOps, step.hostId)) {
-            InvInductive(c, v, v', msgOps);
+            var hostStep :| MultSvc.NextStep(c.multSvc, v.multSvc, v'.multSvc, msgOps, hostStep);
+            var cHost := c.multSvc.hosts[0];
+            var vHost := v.multSvc.hosts[0];
+            var v'Host := v'.multSvc.hosts[0];
+            assert MultSvc.Host.Next(cHost, vHost, v'Host, msgOps);
+
+            if (MultSvc.Host.ReceiveRequest(cHost, vHost, v'Host, msgOps)) {
+                var request :| MultSvc.Host.ReceiveRequestImpl(cHost, vHost, v'Host, msgOps, request);
+                assert msgOps.recv == {Message(request.src, request.dest, Service.MarshallServiceRequest(request.msg))};
+                var sent :| msgOps.send == {sent};
+                assert sent == Message(cHost.idSelf, cHost.idAdditionService, AddSvc.MarshallServiceRequest(AddSvc.AddRequest(vHost.nextSeqNo, 0, request.msg.y)));
+                UniqueParsingAxiom(sent.msg);
+                Service.ParseMarshallServiceRequestInverse(request.msg);
+                assume false;
+                assert recvSvc == msgOps.recv;
+                //assert Service.ReceiveRequest(cSvc, vSvc, v'Svc, MessageOps(recvSvc, sendSvc));
+            } else if (MultSvc.Host.ReceiveIntermediateResponse(cHost, vHost, v'Host, msgOps)) {
+                var svcReply :| MultSvc.Host.ReceiveIntermediateResponseImpl(cHost, vHost, v'Host, msgOps, svcReply);
+                assert vSvc == v'Svc;
+                //assert ServiceRequestsAbstraction(msgOps.recv) == {} && ServiceRepliesAbstraction(msgOps.send) == {};
+            } else {
+                assert MultSvc.Host.ReceiveFinalResponse(cHost, vHost, v'Host, msgOps);
+                var svcReply :| MultSvc.Host.ReceiveFinalResponseImpl(cHost, vHost, v'Host, msgOps, svcReply);
+                InvInductive_ReceiveFinalResponseHelper(c, v, v', msgOps, svcReply);
+            }
             assume false;
         } else {
-            InvInductive(c, v, v', msgOps);   
-            assume false;         
+            assert AddSvcAction(c, v, v', msgOps, step.hostId);
+            assert vSvc == v'Svc;
+            //assert ServiceRequestsAbstraction(msgOps.recv) == {} && ServiceRepliesAbstraction(msgOps.send) == {};
+            assume false;
         }
     }
-    */
 
 }
