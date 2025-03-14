@@ -23,9 +23,8 @@ module MultiplicationServiceSM refines AbstractServiceSM {
             && v'.replies == v.replies
     }
 
-    ghost predicate SendResponse(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
-        exists request: Message<ServiceRequest>, sendPkt: Message<seq<byte>> ::
-            var reply := ParseServiceReply(sendPkt.msg);
+    ghost predicate SendResponseImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, request: Message<ServiceRequest>, sendPkt: Message<seq<byte>>) {
+        var reply := ParseServiceReply(sendPkt.msg);
             && msgOps.recv == {} 
             && msgOps.send == {sendPkt}
             && v'.requests == v.requests
@@ -34,6 +33,10 @@ module MultiplicationServiceSM refines AbstractServiceSM {
             && v'.replies == v.replies + {Message(sendPkt.src, sendPkt.dest, reply.value)}
             && reply.value == MultiplyReply(request.msg.seqNo, request.msg.x * request.msg.y)
             && sendPkt.dest == request.src
+    }
+
+    ghost predicate SendResponse(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
+        exists request: Message<ServiceRequest>, sendPkt: Message<seq<byte>> :: SendResponseImpl(c, v, v', msgOps, request, sendPkt)
     }
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {

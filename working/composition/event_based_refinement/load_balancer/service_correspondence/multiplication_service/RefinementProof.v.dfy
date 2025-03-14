@@ -195,8 +195,6 @@ module RefinementProof refines RefinementTheorem {
             ensures Inv_MultSvcInductiveMultiplicationImpl(c, v', pkt)
         {
             if (pkt == sendPkt) {
-                assert Inv_MultSvcInductiveMultiplication(c, v);
-                assert recvPkt.src == c.addSvc.idSelf;
                 var prevAddReq :| prevAddReq in v.network.sentMsgs && AddSvc.ParseServiceRequest(prevAddReq.msg).Some? && AddSvc.ParseServiceReply(recvPkt.msg).value.seqNo == AddSvc.ParseServiceRequest(prevAddReq.msg).value.seqNo && AddSvc.ParseServiceReply(recvPkt.msg).value.sum == AddSvc.ParseServiceRequest(prevAddReq.msg).value.x + AddSvc.ParseServiceRequest(prevAddReq.msg).value.y && recvPkt.src == prevAddReq.dest && recvPkt.dest == prevAddReq.src;
                 assert prevAddReq.src == c.multSvc.hosts[0].idSelf;
                 assert Inv_MultSvcInductiveMultiplicationImpl(c, v, prevAddReq);
@@ -338,32 +336,54 @@ module RefinementProof refines RefinementTheorem {
             var v'Host := v'.multSvc.hosts[0];
             assert MultSvc.Host.Next(cHost, vHost, v'Host, msgOps);
 
-            /*
             if (MultSvc.Host.ReceiveRequest(cHost, vHost, v'Host, msgOps)) {
-                var request :| MultSvc.Host.ReceiveRequestImpl(cHost, vHost, v'Host, msgOps, request);
-                assert msgOps.recv == {Message(request.src, request.dest, Service.MarshallServiceRequest(request.msg))};
-                var sent :| msgOps.send == {sent};
-                assert sent == Message(cHost.idSelf, cHost.idAdditionService, AddSvc.MarshallServiceRequest(AddSvc.AddRequest(vHost.nextSeqNo, 0, request.msg.y)));
-                UniqueParsingAxiom(sent.msg);
-                Service.ParseMarshallServiceRequestInverse(request.msg);
-                assume false;
-                assert recvSvc == msgOps.recv;
-                //assert Service.ReceiveRequest(cSvc, vSvc, v'Svc, MessageOps(recvSvc, sendSvc));
+                var recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>> :| Service.ParseServiceRequest(recvPkt.msg).Some? && AddSvc.ParseServiceRequest(sendPkt.msg).Some? && MultSvc.Host.ReceiveRequestImpl(cHost, vHost, v'Host, msgOps, recvPkt, sendPkt);
+                UniqueParsingAxiom(sendPkt.msg);
+                assert recvSvc == {recvPkt};
+                assert sendSvc == {};
+                assert Service.ReceiveRequest(cSvc, vSvc, v'Svc, MessageOps(recvSvc, sendSvc));
             } else if (MultSvc.Host.ReceiveIntermediateResponse(cHost, vHost, v'Host, msgOps)) {
-                var svcReply :| MultSvc.Host.ReceiveIntermediateResponseImpl(cHost, vHost, v'Host, msgOps, svcReply);
+                var recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>> :| AddSvc.ParseServiceReply(recvPkt.msg).Some? && AddSvc.ParseServiceRequest(sendPkt.msg).Some? && MultSvc.Host.ReceiveIntermediateResponseImpl(cHost, vHost, v'Host, msgOps, recvPkt, sendPkt);
+                UniqueParsingAxiom(recvPkt.msg);
+                UniqueParsingAxiom(sendPkt.msg);
                 assert vSvc == v'Svc;
-                //assert ServiceRequestsAbstraction(msgOps.recv) == {} && ServiceRepliesAbstraction(msgOps.send) == {};
+                assert ServiceRequestsAbstraction(msgOps.recv) == {} && ServiceRepliesAbstraction(msgOps.send) == {};
             } else {
                 assert MultSvc.Host.ReceiveFinalResponse(cHost, vHost, v'Host, msgOps);
-                var svcReply :| MultSvc.Host.ReceiveFinalResponseImpl(cHost, vHost, v'Host, msgOps, svcReply);
-                InvInductive_ReceiveFinalResponseHelper(c, v, v', msgOps, svcReply);
-            }*/
-            assume false;
+                var recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>>:| AddSvc.ParseServiceReply(recvPkt.msg).Some? && Service.ParseServiceReply(sendPkt.msg).Some? && MultSvc.Host.ReceiveFinalResponseImpl(cHost, vHost, v'Host, msgOps, recvPkt, sendPkt);
+                UniqueParsingAxiom(recvPkt.msg);
+                assert recvSvc == {};
+                assert sendSvc == {sendPkt};
+
+                var addReply := Message(recvPkt.src, recvPkt.dest, AddSvc.ParseServiceReply(recvPkt.msg).value);
+                var reply := Message(sendPkt.src, sendPkt.dest, Service.ParseServiceReply(sendPkt.msg).value);
+                var prevAddReq :| prevAddReq in v.network.sentMsgs && AddSvc.ParseServiceRequest(prevAddReq.msg).Some? && AddSvc.ParseServiceReply(recvPkt.msg).value.seqNo == AddSvc.ParseServiceRequest(prevAddReq.msg).value.seqNo && AddSvc.ParseServiceReply(recvPkt.msg).value.sum == AddSvc.ParseServiceRequest(prevAddReq.msg).value.x + AddSvc.ParseServiceRequest(prevAddReq.msg).value.y && recvPkt.src == prevAddReq.dest && recvPkt.dest == prevAddReq.src;
+                assert prevAddReq.src == c.multSvc.hosts[0].idSelf;
+                assert Inv_MultSvcInductiveMultiplicationImpl(c, v, prevAddReq);
+                var prevAddReqParsed := AddSvc.ParseServiceRequest(prevAddReq.msg).value;
+                assert prevAddReqParsed.seqNo == addReply.msg.seqNo;
+                assert prevAddReqParsed.x == (prevAddReqParsed.seqNo - vHost.firstSeqNo[vHost.seqNoAssgn[prevAddReqParsed.seqNo]]) * vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y && prevAddReqParsed.y == vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y;
+                assert addReply.msg.sum == (prevAddReqParsed.seqNo - vHost.firstSeqNo[vHost.seqNoAssgn[prevAddReqParsed.seqNo]]) * vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y + vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y;
+                InductiveMultiplicationHelper(prevAddReqParsed.seqNo - vHost.firstSeqNo[vHost.seqNoAssgn[prevAddReqParsed.seqNo]], vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y, addReply.msg.sum);
+                assert addReply.msg.sum == (prevAddReqParsed.seqNo + 1 - vHost.firstSeqNo[vHost.seqNoAssgn[prevAddReqParsed.seqNo]]) * vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y;
+                assert addReply.msg.seqNo == vHost.firstSeqNo[vHost.seqNoAssgn[addReply.msg.seqNo]] + vHost.seqNoAssgn[addReply.msg.seqNo].msg.x - 1;
+                assert addReply.msg.sum == vHost.seqNoAssgn[addReply.msg.seqNo].msg.x * vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y;
+
+                var request := vHost.seqNoAssgn[addReply.msg.seqNo];
+                assert request in vHost.requests;
+                assert reply.msg == Service.MultiplyReply(request.msg.seqNo, request.msg.x * request.msg.y);
+                assert sendPkt.dest == request.src;
+                
+                assert Service.SendResponseImpl(cSvc, vSvc, v'Svc, MessageOps(recvSvc, sendSvc), request, sendPkt);
+                assert Service.SendResponse(cSvc, vSvc, v'Svc, MessageOps(recvSvc, sendSvc));
+            }
         } else {
             assert AddSvcAction(c, v, v', msgOps, step.hostId);
             assert vSvc == v'Svc;
-            //assert ServiceRequestsAbstraction(msgOps.recv) == {} && ServiceRepliesAbstraction(msgOps.send) == {};
-            assume false;
+            var recv : Message<seq<byte>>, send : Message<seq<byte>> :| AddSvc.AddImpl(c.addSvc, v.addSvc, v'.addSvc, msgOps, recv, send);
+            UniqueParsingAxiom(recv.msg);
+            UniqueParsingAxiom(send.msg);
+            assert ServiceRequestsAbstraction(msgOps.recv) == {} && ServiceRepliesAbstraction(msgOps.send) == {};
         }
     }
 
