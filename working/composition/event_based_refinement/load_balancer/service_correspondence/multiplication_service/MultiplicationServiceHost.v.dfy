@@ -61,8 +61,12 @@ module MultiplicationServiceHost refines AbstractHost {
         && v.nextSeqNo == 0
     }
 
-    ghost predicate ReceiveRequestImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, request: Message<ServiceRequest>)
+    ghost predicate ReceiveRequestImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>>)
+        requires ParseServiceRequest(recvPkt.msg).Some?
+        requires AdditionService.ParseServiceRequest(sendPkt.msg).Some?
     {
+        var request := Message(recvPkt.src, recvPkt.dest, ParseServiceRequest(recvPkt.msg).value);
+        var addRequest := Message(sendPkt.src, sendPkt.dest, AdditionService.ParseServiceRequest(sendPkt.msg).value);
         && v.WF(c)
         && v'.WF(c)
         && request !in v.requests
@@ -80,17 +84,26 @@ module MultiplicationServiceHost refines AbstractHost {
         && v'.intermediateResults == v.intermediateResults[request := []]
         && v'.nextSeqNo == v.nextSeqNo + request.msg.x
         && v'.replies == v.replies
-        && msgOps.recv == {Message(request.src, request.dest, MarshallServiceRequest(request.msg))}
-        && msgOps.send == {Message(c.idSelf, c.idAdditionService, AdditionService.MarshallServiceRequest(AdditionService.AddRequest(v.nextSeqNo, 0, request.msg.y)))}
+        && addRequest.msg == AdditionService.AddRequest(v.nextSeqNo, 0, request.msg.y)
+        && msgOps.recv == {recvPkt}
+        && msgOps.send == {sendPkt}
+        && sendPkt.dest == c.idAdditionService
     }
 
     ghost predicate ReceiveRequest(c: Constants, v: Variables, v': Variables, msgOps: MessageOps)
     {
-        exists request :: ReceiveRequestImpl(c, v, v', msgOps, request)    
+        exists recv: Message<seq<byte>>, send: Message<seq<byte>> :: 
+            && ParseServiceRequest(recv.msg).Some?
+            && AdditionService.ParseServiceRequest(send.msg).Some?
+            && ReceiveRequestImpl(c, v, v', msgOps, recv, send)    
     }
 
-    ghost predicate ReceiveIntermediateResponseImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, reply: Message<AdditionService.ServiceReply>)
+    ghost predicate ReceiveIntermediateResponseImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>>)
+        requires AdditionService.ParseServiceReply(recvPkt.msg).Some?
+        requires AdditionService.ParseServiceRequest(sendPkt.msg).Some?
     {
+        var addReply := Message(recvPkt.src, recvPkt.dest, AdditionService.ParseServiceReply(recvPkt.msg).value);
+        var addRequest := Message(sendPkt.src, sendPkt.dest, AdditionService.ParseServiceRequest(sendPkt.msg).value);
         && v.WF(c)
         && v'.WF(c)
         && v'.requests == v.requests
@@ -98,41 +111,56 @@ module MultiplicationServiceHost refines AbstractHost {
         && v'.seqNoAssgn == v.seqNoAssgn
         && v'.nextSeqNo == v.nextSeqNo
         && v'.firstSeqNo == v.firstSeqNo
-        && reply.msg.seqNo in v.seqNoAssgn
-        && reply.msg.seqNo == v.firstSeqNo[v.seqNoAssgn[reply.msg.seqNo]] + |v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo]]|
-        && v'.intermediateResults == v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo] := v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo]] + [reply]]
-        && reply.msg.seqNo < v.firstSeqNo[v.seqNoAssgn[reply.msg.seqNo]] + v.seqNoAssgn[reply.msg.seqNo].msg.x - 1
-        && msgOps.recv == {Message(c.idAdditionService, reply.dest, AdditionService.MarshallServiceReply(reply.msg))}
-        && reply.src == c.idAdditionService
-        && msgOps.send == {Message(c.idSelf, c.idAdditionService, AdditionService.MarshallServiceRequest(AdditionService.AddRequest(reply.msg.seqNo + 1, reply.msg.sum, v.seqNoAssgn[reply.msg.seqNo].msg.y)))}
+        && addReply.msg.seqNo in v.seqNoAssgn
+        && addReply.msg.seqNo == v.firstSeqNo[v.seqNoAssgn[addReply.msg.seqNo]] + |v.intermediateResults[v.seqNoAssgn[addReply.msg.seqNo]]|
+        && v'.intermediateResults == v.intermediateResults[v.seqNoAssgn[addReply.msg.seqNo] := v.intermediateResults[v.seqNoAssgn[addReply.msg.seqNo]] + [addReply]]
+        && addReply.msg.seqNo < v.firstSeqNo[v.seqNoAssgn[addReply.msg.seqNo]] + v.seqNoAssgn[addReply.msg.seqNo].msg.x - 1
+        && addRequest.msg == AdditionService.AddRequest(addReply.msg.seqNo + 1, addReply.msg.sum, v.seqNoAssgn[addReply.msg.seqNo].msg.y)
+        && msgOps.recv == {recvPkt}
+        && recvPkt.src == c.idAdditionService
+        && msgOps.send == {sendPkt}
+        && sendPkt.dest == c.idAdditionService
     }
 
     ghost predicate ReceiveIntermediateResponse(c: Constants, v: Variables, v': Variables, msgOps: MessageOps)
     {
-        exists reply :: ReceiveIntermediateResponseImpl(c, v, v', msgOps, reply)
+        exists recv: Message<seq<byte>>, send: Message<seq<byte>> :: 
+            && AdditionService.ParseServiceReply(recv.msg).Some?
+            && AdditionService.ParseServiceRequest(send.msg).Some?
+            && ReceiveIntermediateResponseImpl(c, v, v', msgOps, recv, send)
     }
 
-    ghost predicate ReceiveFinalResponseImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, reply: Message<AdditionService.ServiceReply>)
+    ghost predicate ReceiveFinalResponseImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>>)
+        requires AdditionService.ParseServiceReply(recvPkt.msg).Some?
+        requires ParseServiceReply(sendPkt.msg).Some?
     {
+        var addReply := Message(recvPkt.src, recvPkt.dest, AdditionService.ParseServiceReply(recvPkt.msg).value);
+        var reply := Message(sendPkt.src, sendPkt.dest, ParseServiceReply(sendPkt.msg).value);
         && v.WF(c)
         && v'.WF(c)
         && v'.requests == v.requests
         && v'.seqNoAssgn == v.seqNoAssgn
         && v'.nextSeqNo == v.nextSeqNo
         && v'.firstSeqNo == v.firstSeqNo
-        && reply.msg.seqNo in v.seqNoAssgn
-        && reply.msg.seqNo == v.firstSeqNo[v.seqNoAssgn[reply.msg.seqNo]] + |v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo]]|
-        && v'.intermediateResults == v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo] := v.intermediateResults[v.seqNoAssgn[reply.msg.seqNo]] + [reply]]
-        && reply.msg.seqNo == v.firstSeqNo[v.seqNoAssgn[reply.msg.seqNo]] + v.seqNoAssgn[reply.msg.seqNo].msg.x - 1
-        && v'.replies == v.replies + {Message(c.idSelf, v.seqNoAssgn[reply.msg.seqNo].src, MultiplyReply(v.seqNoAssgn[reply.msg.seqNo].msg.seqNo, reply.msg.sum))}
-        && msgOps.recv == {Message(reply.src, reply.dest, AdditionService.MarshallServiceReply(reply.msg))}
-        && reply.src == c.idAdditionService
-        && msgOps.send == {Message(c.idSelf, v.seqNoAssgn[reply.msg.seqNo].src, MarshallServiceReply(MultiplyReply(v.seqNoAssgn[reply.msg.seqNo].msg.seqNo, reply.msg.sum)))}
+        && addReply.msg.seqNo in v.seqNoAssgn
+        && addReply.msg.seqNo == v.firstSeqNo[v.seqNoAssgn[addReply.msg.seqNo]] + |v.intermediateResults[v.seqNoAssgn[addReply.msg.seqNo]]|
+        && v'.intermediateResults == v.intermediateResults[v.seqNoAssgn[addReply.msg.seqNo] := v.intermediateResults[v.seqNoAssgn[addReply.msg.seqNo]] + [addReply]]
+        && addReply.msg.seqNo == v.firstSeqNo[v.seqNoAssgn[addReply.msg.seqNo]] + v.seqNoAssgn[addReply.msg.seqNo].msg.x - 1
+        && reply !in v.replies
+        && v'.replies == v.replies + {reply}
+        && reply.msg == MultiplyReply(v.seqNoAssgn[addReply.msg.seqNo].msg.seqNo, addReply.msg.sum)
+        && msgOps.recv == {recvPkt}
+        && recvPkt.src == c.idAdditionService
+        && msgOps.send == {sendPkt}
+        && sendPkt.dest == v.seqNoAssgn[addReply.msg.seqNo].src
     }
 
     ghost predicate ReceiveFinalResponse(c: Constants, v: Variables, v': Variables, msgOps: MessageOps)
     {
-        exists reply :: ReceiveFinalResponseImpl(c, v, v', msgOps, reply)       
+        exists recv: Message<seq<byte>>, send: Message<seq<byte>> :: 
+            && AdditionService.ParseServiceReply(recv.msg).Some?
+            && ParseServiceReply(send.msg).Some?
+            && ReceiveFinalResponseImpl(c, v, v', msgOps, recv, send)       
     }
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, msgOps: MessageOps)

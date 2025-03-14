@@ -29,11 +29,11 @@ module RefinementProof refines RefinementTheorem {
                 exists request: Message<Service.ServiceRequest> :: 
                 && Message(pkt.src, pkt.dest, Service.ParseServiceReply(pkt.msg).value) in v.multSvc.hosts[0].replies
                 && request in v.multSvc.hosts[0].requests 
-                && request.src == pkt.dest
-                && request.dest == pkt.src)
-        && (forall request: Message<Service.ServiceRequest> ::
-            && request in v.multSvc.hosts[0].requests ==>
-            && Message(request.src, request.dest, Service.MarshallServiceRequest(request.msg)) in v.network.sentMsgs
+                && request.src == pkt.dest)
+        && (forall request: Message<seq<byte>> ::
+            && Service.ParseServiceRequest(request.msg).Some?
+            && Message(request.src, request.dest, Service.ParseServiceRequest(request.msg).value) in v.multSvc.hosts[0].requests ==>
+            && request in v.network.sentMsgs
             && request.dest == c.multSvc.hosts[0].idSelf)
     }
 
@@ -95,28 +95,47 @@ module RefinementProof refines RefinementTheorem {
         // ensures Service.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
     {}
 
-    lemma InvInductive_ReceiveRequestHelper(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, request: Message<Service.ServiceRequest>)
+    lemma SetUnionHelper<T>(s1: set<T>, s2: set<T>, a: T, b: T)
+        requires s2 == s1 + {a}
+        requires b !in s1
+        requires b in s2
+        ensures a == b
+    {}
+
+    lemma InvInductive_ReceiveRequestHelper(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>>)
         requires Next(c, v, v', msgOps)
         requires Inv(c, v)
-        requires MultSvc.Host.ReceiveRequestImpl(c.multSvc.hosts[0], v.multSvc.hosts[0], v'.multSvc.hosts[0], msgOps, request)
+        requires Service.ParseServiceRequest(recvPkt.msg).Some?
+        requires AddSvc.ParseServiceRequest(sendPkt.msg).Some?
+        requires MultSvc.Host.ReceiveRequestImpl(c.multSvc.hosts[0], v.multSvc.hosts[0], v'.multSvc.hosts[0], msgOps, recvPkt, sendPkt)
         ensures Inv(c, v')
     {
-        assume false;
         var cHost := c.multSvc.hosts[0];
         var vHost := v.multSvc.hosts[0];
         var v'Host := v'.multSvc.hosts[0];
-        assert msgOps.recv == {Message(request.src, request.dest, Service.MarshallServiceRequest(request.msg))};
-        var sent :| msgOps.send == {sent};
-        var addReq := AddSvc.AddRequest(vHost.nextSeqNo, 0, request.msg.y);
-        assert sent == Message(cHost.idSelf, cHost.idAdditionService, AddSvc.MarshallServiceRequest(addReq));
-        UniqueParsingAxiom(sent.msg);
-        AddSvc.ParseMarshallServiceRequestInverse(addReq);
+        var request := Message(recvPkt.src, recvPkt.dest, Service.ParseServiceRequest(recvPkt.msg).value);
+        var addRequest := Message(sendPkt.src, sendPkt.dest, AddSvc.ParseServiceRequest(sendPkt.msg).value);
+        var addReq := addRequest.msg;
+        assert sendPkt == Message(cHost.idSelf, cHost.idAdditionService, sendPkt.msg);
+        forall reqPkt: Message<seq<byte>> | Service.ParseServiceRequest(reqPkt.msg).Some? && Message(reqPkt.src, reqPkt.dest, Service.ParseServiceRequest(reqPkt.msg).value) in v'Host.requests
+            ensures reqPkt in v'.network.sentMsgs && reqPkt.dest == cHost.idSelf
+        {
+            if (Message(reqPkt.src, reqPkt.dest, Service.ParseServiceRequest(reqPkt.msg).value) !in vHost.requests) {
+                assert v'Host.requests == vHost.requests + {Message(recvPkt.src, recvPkt.dest, Service.ParseServiceRequest(recvPkt.msg).value)};
+                SetUnionHelper(vHost.requests, v'Host.requests, Message(recvPkt.src, recvPkt.dest, Service.ParseServiceRequest(recvPkt.msg).value), Message(reqPkt.src, reqPkt.dest, Service.ParseServiceRequest(reqPkt.msg).value));
+                assert Message(reqPkt.src, reqPkt.dest, Service.ParseServiceRequest(reqPkt.msg).value) == Message(recvPkt.src, recvPkt.dest, Service.ParseServiceRequest(recvPkt.msg).value);
+                Service.ParseOneToOne(reqPkt.msg, recvPkt.msg);
+                assert reqPkt == recvPkt;
+            } else {
+                assert Inv_MultSvcCorrespondence(c, v);
+                assert reqPkt in v.network.sentMsgs;
+            }
+        }
+        UniqueParsingAxiom(sendPkt.msg);
         assert Inv_MultSvcCorrespondence(c, v');
         assert Inv_AddSvcImpl(c, v');
 
-        assert v'.network.sentMsgs == v.network.sentMsgs + {sent};
-        assert AddSvc.ParseServiceRequest(sent.msg).Some?;
-        assert addReq == AddSvc.ParseServiceRequest(sent.msg).value;
+        assert v'.network.sentMsgs == v.network.sentMsgs + {sendPkt};
         assert addReq.seqNo == vHost.nextSeqNo;
         assert v'Host.firstSeqNo[request] == vHost.nextSeqNo;
         assert v'Host.seqNoAssgn[vHost.nextSeqNo] == request;
@@ -126,7 +145,7 @@ module RefinementProof refines RefinementTheorem {
         forall pkt | pkt in v'.network.sentMsgs && AddSvc.ParseServiceRequest(pkt.msg).Some? && pkt.src == c.multSvc.hosts[0].idSelf
             ensures Inv_MultSvcInductiveMultiplicationImpl(c, v', pkt)
         {
-            if (pkt == sent) {
+            if (pkt == sendPkt) {
                 assert Inv_MultSvcInductiveMultiplicationImpl(c, v', pkt);
             } else {
                 assert pkt in v.network.sentMsgs;
@@ -147,54 +166,46 @@ module RefinementProof refines RefinementTheorem {
         ensures (a + 1) * b == p
     {}
 
-    lemma InvInductive_ReceiveIntermediateResponseHelper(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, svcReply: Message<AddSvc.ServiceReply>) 
+    lemma InvInductive_ReceiveIntermediateResponseHelper(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>>) 
         requires Next(c, v, v', msgOps)
         requires Inv(c, v)
-        requires MultSvc.Host.ReceiveIntermediateResponseImpl(c.multSvc.hosts[0], v.multSvc.hosts[0], v'.multSvc.hosts[0], msgOps, svcReply)
+        requires AddSvc.ParseServiceReply(recvPkt.msg).Some?
+        requires AddSvc.ParseServiceRequest(sendPkt.msg).Some?
+        requires MultSvc.Host.ReceiveIntermediateResponseImpl(c.multSvc.hosts[0], v.multSvc.hosts[0], v'.multSvc.hosts[0], msgOps, recvPkt, sendPkt)
         ensures Inv(c, v')
     {
-        assume false;
         var cHost := c.multSvc.hosts[0];
         var vHost := v.multSvc.hosts[0];
         var v'Host := v'.multSvc.hosts[0];
-        assert msgOps.recv == {Message(svcReply.src, svcReply.dest, AddSvc.MarshallServiceReply(svcReply.msg))};
-        var sent :| msgOps.send == {sent};
-        var addReq := AddSvc.AddRequest(svcReply.msg.seqNo + 1, svcReply.msg.sum, vHost.seqNoAssgn[svcReply.msg.seqNo].msg.y);
-        assert sent == Message(cHost.idSelf, cHost.idAdditionService, AddSvc.MarshallServiceRequest(addReq));
-        UniqueParsingAxiom(sent.msg);
-        AddSvc.ParseMarshallServiceRequestInverse(addReq);
+        var addReply := Message(recvPkt.src, recvPkt.dest, AddSvc.ParseServiceReply(recvPkt.msg).value);
+        var addRequest := Message(sendPkt.src, sendPkt.dest, AddSvc.ParseServiceRequest(sendPkt.msg).value);
+        var addReq := addRequest.msg;
+        assert sendPkt == Message(cHost.idSelf, cHost.idAdditionService, sendPkt.msg);
+        UniqueParsingAxiom(sendPkt.msg);
         assert Inv_MultSvcCorrespondence(c, v');
         assert Inv_AddSvcImpl(c, v');
 
-        assert v'.network.sentMsgs == v.network.sentMsgs + {sent};
-        assert AddSvc.ParseServiceRequest(sent.msg).Some?;
-        assert addReq == AddSvc.ParseServiceRequest(sent.msg).value;
-        assert addReq.seqNo == svcReply.msg.seqNo + 1;
-        var request := vHost.seqNoAssgn[svcReply.msg.seqNo];
-        assert svcReply.msg.seqNo == vHost.firstSeqNo[request] + |vHost.intermediateResults[request]|;
-        assert addReq.x == svcReply.msg.sum;
+        assert v'.network.sentMsgs == v.network.sentMsgs + {sendPkt};
+        assert addReq.seqNo == addReply.msg.seqNo + 1;
+        var request := vHost.seqNoAssgn[addReply.msg.seqNo];
+        assert addReply.msg.seqNo == vHost.firstSeqNo[request] + |vHost.intermediateResults[request]|;
+        assert addReq.x == addReply.msg.sum;
         assert addReq.y == request.msg.y;
         forall pkt | pkt in v'.network.sentMsgs && AddSvc.ParseServiceRequest(pkt.msg).Some? && pkt.src == c.multSvc.hosts[0].idSelf
             ensures Inv_MultSvcInductiveMultiplicationImpl(c, v', pkt)
         {
-            if (pkt == sent) {
+            if (pkt == sendPkt) {
                 assert Inv_MultSvcInductiveMultiplication(c, v);
-                var prevAddResp :| msgOps.recv == {prevAddResp};
-                assert prevAddResp.msg == AddSvc.MarshallServiceReply(svcReply.msg);
-                AddSvc.MarshallParseInverse(prevAddResp.msg);
-                assert AddSvc.ParseServiceReply(prevAddResp.msg).Some?;
-                assert prevAddResp.src == c.addSvc.idSelf;
-                var prevAddReq :| prevAddReq in v.network.sentMsgs && AddSvc.ParseServiceRequest(prevAddReq.msg).Some? && AddSvc.ParseServiceReply(prevAddResp.msg).value.seqNo == AddSvc.ParseServiceRequest(prevAddReq.msg).value.seqNo && AddSvc.ParseServiceReply(prevAddResp.msg).value.sum == AddSvc.ParseServiceRequest(prevAddReq.msg).value.x + AddSvc.ParseServiceRequest(prevAddReq.msg).value.y && prevAddResp.src == prevAddReq.dest && prevAddResp.dest == prevAddReq.src;
+                assert recvPkt.src == c.addSvc.idSelf;
+                var prevAddReq :| prevAddReq in v.network.sentMsgs && AddSvc.ParseServiceRequest(prevAddReq.msg).Some? && AddSvc.ParseServiceReply(recvPkt.msg).value.seqNo == AddSvc.ParseServiceRequest(prevAddReq.msg).value.seqNo && AddSvc.ParseServiceReply(recvPkt.msg).value.sum == AddSvc.ParseServiceRequest(prevAddReq.msg).value.x + AddSvc.ParseServiceRequest(prevAddReq.msg).value.y && recvPkt.src == prevAddReq.dest && recvPkt.dest == prevAddReq.src;
                 assert prevAddReq.src == c.multSvc.hosts[0].idSelf;
                 assert Inv_MultSvcInductiveMultiplicationImpl(c, v, prevAddReq);
                 var prevAddReqParsed := AddSvc.ParseServiceRequest(prevAddReq.msg).value;
-                AddSvc.ParseMarshallServiceReplyInverse(svcReply.msg);
-                assert prevAddReqParsed.seqNo == svcReply.msg.seqNo;
+                assert prevAddReqParsed.seqNo == addReply.msg.seqNo;
                 assert prevAddReqParsed.seqNo + 1 == addReq.seqNo;
                 assert prevAddReqParsed.x == (prevAddReqParsed.seqNo - vHost.firstSeqNo[vHost.seqNoAssgn[prevAddReqParsed.seqNo]]) * vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y && prevAddReqParsed.y == vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y;
-                AddSvc.ParseMarshallServiceReplyInverse(svcReply.msg);
-                assert svcReply.msg.sum == (prevAddReqParsed.seqNo - vHost.firstSeqNo[vHost.seqNoAssgn[prevAddReqParsed.seqNo]]) * vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y + vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y;
-                InductiveMultiplicationHelper(prevAddReqParsed.seqNo - vHost.firstSeqNo[vHost.seqNoAssgn[prevAddReqParsed.seqNo]], vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y, svcReply.msg.sum);
+                assert addReply.msg.sum == (prevAddReqParsed.seqNo - vHost.firstSeqNo[vHost.seqNoAssgn[prevAddReqParsed.seqNo]]) * vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y + vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y;
+                InductiveMultiplicationHelper(prevAddReqParsed.seqNo - vHost.firstSeqNo[vHost.seqNoAssgn[prevAddReqParsed.seqNo]], vHost.seqNoAssgn[prevAddReqParsed.seqNo].msg.y, addReply.msg.sum);
                 assert addReq.x == (addReq.seqNo - v'Host.firstSeqNo[vHost.seqNoAssgn[addReq.seqNo]]) * v'Host.seqNoAssgn[addReq.seqNo].msg.y;
                 assert addReq.y ==  v'Host.seqNoAssgn[addReq.seqNo].msg.y;
                 assert addReq.seqNo in v'Host.seqNoAssgn;
@@ -212,33 +223,41 @@ module RefinementProof refines RefinementTheorem {
         assert Inv_MultSvcInductiveMultiplication(c, v');
     }
 
-    lemma InvInductive_ReceiveFinalResponseHelper(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, svcReply: Message<AddSvc.ServiceReply>) 
+    lemma InvInductive_ReceiveFinalResponseHelper(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>>) 
         requires Next(c, v, v', msgOps)
         requires Inv(c, v)
-        requires MultSvc.Host.ReceiveFinalResponseImpl(c.multSvc.hosts[0], v.multSvc.hosts[0], v'.multSvc.hosts[0], msgOps, svcReply)
+        requires AddSvc.ParseServiceReply(recvPkt.msg).Some?
+        requires Service.ParseServiceReply(sendPkt.msg).Some?
+        requires MultSvc.Host.ReceiveFinalResponseImpl(c.multSvc.hosts[0], v.multSvc.hosts[0], v'.multSvc.hosts[0], msgOps, recvPkt, sendPkt)
         ensures Inv(c, v')
     {
-        assume false;
         var cHost := c.multSvc.hosts[0];
         var vHost := v.multSvc.hosts[0];
         var v'Host := v'.multSvc.hosts[0];
+        var addReply := Message(recvPkt.src, recvPkt.dest, AddSvc.ParseServiceReply(recvPkt.msg).value);
+        var reply := Message(sendPkt.src, sendPkt.dest, Service.ParseServiceReply(sendPkt.msg).value);
+        assert sendPkt == Message(cHost.idSelf, vHost.seqNoAssgn[addReply.msg.seqNo].src, sendPkt.msg);
 
-        var svcReply :| MultSvc.Host.ReceiveFinalResponseImpl(cHost, vHost, v'Host, msgOps, svcReply);
-        assert msgOps.recv == {Message(svcReply.src, svcReply.dest, AddSvc.MarshallServiceReply(svcReply.msg))};
-        var sent :| msgOps.send == {sent};
-        var multSvcReply := Service.MultiplyReply(vHost.seqNoAssgn[svcReply.msg.seqNo].msg.seqNo, svcReply.msg.sum);
-        assert sent == Message(cHost.idSelf, vHost.seqNoAssgn[svcReply.msg.seqNo].src, Service.MarshallServiceReply(multSvcReply));
-        Service.MarshallParseInverse(sent.msg);
-        assert Service.ParseServiceReply(sent.msg).Some?;
-        Service.ParseMarshallServiceReplyInverse(multSvcReply);
-        assert multSvcReply == Service.ParseServiceReply(sent.msg).value;
-        var request := vHost.seqNoAssgn[svcReply.msg.seqNo];
-        assert request in vHost.requests;
-        assert request.src == sent.dest && request.dest == sent.src;
+        forall pkt: Message<seq<byte>> | pkt in v'.network.sentMsgs && Service.ParseServiceReply(pkt.msg).Some? && pkt.src == cHost.idSelf
+            ensures (exists request: Message<Service.ServiceRequest> :: 
+                && Message(pkt.src, pkt.dest, Service.ParseServiceReply(pkt.msg).value) in v'Host.replies
+                && request in v'Host.requests 
+                && request.src == pkt.dest)
+        {
+            if (pkt == sendPkt) {
+                var request := v'Host.seqNoAssgn[addReply.msg.seqNo];
+                assert request in v'Host.requests;
+                assert request.src == sendPkt.dest;
+                assert reply in v'Host.replies;
+            } else {
+                assert pkt in v.network.sentMsgs;
+            }
+        }
+
         assert Inv_MultSvcCorrespondence(c, v');
         assert Inv_AddSvcImpl(c, v');
 
-        UniqueParsingAxiom(sent.msg);
+        UniqueParsingAxiom(sendPkt.msg);
         assert Inv_MultSvcInductiveMultiplication(c, v');
     }
 
@@ -256,27 +275,21 @@ module RefinementProof refines RefinementTheorem {
             assert MultSvc.Host.Next(cHost, vHost, v'Host, msgOps);
 
             if (MultSvc.Host.ReceiveRequest(cHost, vHost, v'Host, msgOps)) {
-                var request :| MultSvc.Host.ReceiveRequestImpl(cHost, vHost, v'Host, msgOps, request);
-                InvInductive_ReceiveRequestHelper(c, v, v', msgOps, request);
+                var recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>> :| Service.ParseServiceRequest(recvPkt.msg).Some? && AddSvc.ParseServiceRequest(sendPkt.msg).Some? && MultSvc.Host.ReceiveRequestImpl(cHost, vHost, v'Host, msgOps, recvPkt, sendPkt);
+                InvInductive_ReceiveRequestHelper(c, v, v', msgOps, recvPkt, sendPkt);
             } else if (MultSvc.Host.ReceiveIntermediateResponse(cHost, vHost, v'Host, msgOps)) {
-                var svcReply :| MultSvc.Host.ReceiveIntermediateResponseImpl(cHost, vHost, v'Host, msgOps, svcReply);
-                InvInductive_ReceiveIntermediateResponseHelper(c, v, v', msgOps, svcReply);
+                var recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>> :| AddSvc.ParseServiceReply(recvPkt.msg).Some? && AddSvc.ParseServiceRequest(sendPkt.msg).Some? && MultSvc.Host.ReceiveIntermediateResponseImpl(cHost, vHost, v'Host, msgOps, recvPkt, sendPkt);
+                InvInductive_ReceiveIntermediateResponseHelper(c, v, v', msgOps, recvPkt, sendPkt);
             } else {
                 assert MultSvc.Host.ReceiveFinalResponse(cHost, vHost, v'Host, msgOps);
-                var svcReply :| MultSvc.Host.ReceiveFinalResponseImpl(cHost, vHost, v'Host, msgOps, svcReply);
-                InvInductive_ReceiveFinalResponseHelper(c, v, v', msgOps, svcReply);
+                var recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>>:| AddSvc.ParseServiceReply(recvPkt.msg).Some? && Service.ParseServiceReply(sendPkt.msg).Some? && MultSvc.Host.ReceiveFinalResponseImpl(cHost, vHost, v'Host, msgOps, recvPkt, sendPkt);
+                InvInductive_ReceiveFinalResponseHelper(c, v, v', msgOps, recvPkt, sendPkt);
             }
         } else {
             assert AddSvcAction(c, v, v', msgOps, step.hostId);
-            var sent :| msgOps.send == {sent};
-            var request: Message<AddSvc.ServiceRequest>, reply: Message<AddSvc.ServiceReply> :| msgOps.recv == {Message(request.src, request.dest, AddSvc.MarshallServiceRequest(request.msg))} && msgOps.send == {Message(reply.src, reply.dest, AddSvc.MarshallServiceReply(reply.msg))} && reply.msg == AddSvc.AddReply(request.msg.seqNo, request.msg.x + request.msg.y) && reply.dest == request.src;
-            assert sent == Message(reply.src, reply.dest, AddSvc.MarshallServiceReply(reply.msg));
-            AddSvc.MarshallParseInverse(sent.msg);
-            assert AddSvc.ParseServiceReply(sent.msg).Some?;
-            var recv :| msgOps.recv == {recv};
-            assert recv == Message(request.src, request.dest, AddSvc.MarshallServiceRequest(request.msg));
-            AddSvc.MarshallParseInverse(recv.msg); 
-            assert AddSvc.ParseServiceRequest(recv.msg).Some?;
+            var recvPkt, sendPkt :| AddSvc.AddImpl(c.addSvc, v.addSvc, v'.addSvc, msgOps, recvPkt, sendPkt);
+            assert AddSvc.ParseServiceReply(sendPkt.msg).Some?;
+            assert AddSvc.ParseServiceRequest(recvPkt.msg).Some?;
 
             assert Inv_MultSvcCorrespondence(c, v');
             
@@ -289,11 +302,10 @@ module RefinementProof refines RefinementTheorem {
                 && pkt.src == req_pkt.dest
                 && pkt.dest == req_pkt.src)
             {
-                if (pkt == sent) {
-                    assert recv in v'.network.sentMsgs;
-                    AddSvc.ParseMarshallServiceReplyInverse(reply.msg);
-                    AddSvc.ParseMarshallServiceRequestInverse(request.msg);
-                    assert AddSvc.ParseServiceRequest(recv.msg).Some? && AddSvc.ParseServiceReply(pkt.msg).value.seqNo == AddSvc.ParseServiceRequest(recv.msg).value.seqNo && AddSvc.ParseServiceReply(pkt.msg).value.sum == AddSvc.ParseServiceRequest(recv.msg).value.x + AddSvc.ParseServiceRequest(recv.msg).value.y;
+                if (pkt == sendPkt) {
+                    assert recvPkt in v'.network.sentMsgs;
+                    assert AddSvc.ParseServiceReply(pkt.msg).value.seqNo == AddSvc.ParseServiceRequest(recvPkt.msg).value.seqNo;
+                    assert AddSvc.ParseServiceReply(pkt.msg).value.sum == AddSvc.ParseServiceRequest(recvPkt.msg).value.x + AddSvc.ParseServiceRequest(recvPkt.msg).value.y;
                 } else {
                     assert pkt in v.network.sentMsgs;
                 }
@@ -326,6 +338,7 @@ module RefinementProof refines RefinementTheorem {
             var v'Host := v'.multSvc.hosts[0];
             assert MultSvc.Host.Next(cHost, vHost, v'Host, msgOps);
 
+            /*
             if (MultSvc.Host.ReceiveRequest(cHost, vHost, v'Host, msgOps)) {
                 var request :| MultSvc.Host.ReceiveRequestImpl(cHost, vHost, v'Host, msgOps, request);
                 assert msgOps.recv == {Message(request.src, request.dest, Service.MarshallServiceRequest(request.msg))};
@@ -344,7 +357,7 @@ module RefinementProof refines RefinementTheorem {
                 assert MultSvc.Host.ReceiveFinalResponse(cHost, vHost, v'Host, msgOps);
                 var svcReply :| MultSvc.Host.ReceiveFinalResponseImpl(cHost, vHost, v'Host, msgOps, svcReply);
                 InvInductive_ReceiveFinalResponseHelper(c, v, v', msgOps, svcReply);
-            }
+            }*/
             assume false;
         } else {
             assert AddSvcAction(c, v, v', msgOps, step.hostId);

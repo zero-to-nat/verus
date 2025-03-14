@@ -13,12 +13,19 @@ module AdditionServiceSM refines AbstractServiceSM {
         true
     }
 
+    ghost predicate AddImpl(c: Constants, v: Variables, v': Variables, msgOps: MessageOps, recvPkt: Message<seq<byte>>, sendPkt: Message<seq<byte>>) {
+        var pRequest := ParseServiceRequest(recvPkt.msg);
+        var pReply := ParseServiceReply(sendPkt.msg);
+        && msgOps.recv == {recvPkt} 
+        && msgOps.send == {sendPkt}
+        && pRequest.Some?
+        && pReply.Some?
+        && pReply.value == AddReply(pRequest.value.seqNo, pRequest.value.x + pRequest.value.y)
+        && sendPkt.dest == recvPkt.src
+    }
+
     ghost predicate Add(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
-        exists request : Message<ServiceRequest>, reply : Message<ServiceReply> ::
-            && msgOps.recv == {Message(request.src, request.dest, MarshallServiceRequest(request.msg))} 
-            && msgOps.send == {Message(reply.src, reply.dest, MarshallServiceReply(reply.msg))}
-            && reply.msg == AddReply(request.msg.seqNo, request.msg.x + request.msg.y)
-            && reply.dest == request.src
+        exists recv : Message<seq<byte>>, send : Message<seq<byte>> :: AddImpl(c, v, v', msgOps, recv, send)
     }
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {

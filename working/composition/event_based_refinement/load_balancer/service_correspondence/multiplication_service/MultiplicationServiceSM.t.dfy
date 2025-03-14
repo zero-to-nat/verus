@@ -14,22 +14,26 @@ module MultiplicationServiceSM refines AbstractServiceSM {
     }
 
     ghost predicate ReceiveRequest(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
-        exists request: Message<ServiceRequest> ::
-            && msgOps.recv == {Message(request.src, request.dest, MarshallServiceRequest(request.msg))} 
+        exists recvPkt: Message<seq<byte>> ::
+            var request := ParseServiceRequest(recvPkt.msg);
+            && msgOps.recv == {recvPkt} 
             && msgOps.send == {}
-            && v'.requests == v.requests + {request}
+            && request.Some?
+            && v'.requests == v.requests + {Message(recvPkt.src, recvPkt.dest, request.value)}
             && v'.replies == v.replies
     }
 
     ghost predicate SendResponse(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
-        exists request: Message<ServiceRequest>, reply: Message<ServiceReply> ::
+        exists request: Message<ServiceRequest>, sendPkt: Message<seq<byte>> ::
+            var reply := ParseServiceReply(sendPkt.msg);
             && msgOps.recv == {} 
-            && msgOps.send == {Message(reply.src, reply.dest, MarshallServiceReply(reply.msg))}
+            && msgOps.send == {sendPkt}
             && v'.requests == v.requests
             && request in v.requests
-            && v'.replies == v.replies + {reply}
-            && reply.msg == MultiplyReply(request.msg.seqNo, request.msg.x * request.msg.y)
-            && reply.dest == request.src
+            && reply.Some?
+            && v'.replies == v.replies + {Message(sendPkt.src, sendPkt.dest, reply.value)}
+            && reply.value == MultiplyReply(request.msg.seqNo, request.msg.x * request.msg.y)
+            && sendPkt.dest == request.src
     }
 
     ghost predicate Next(c: Constants, v: Variables, v': Variables, msgOps: MessageOps) {
