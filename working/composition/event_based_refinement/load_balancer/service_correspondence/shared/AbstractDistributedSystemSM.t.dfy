@@ -1,7 +1,7 @@
+include "AbstractServiceSM.t.dfy"
 include "AbstractNetwork.t.dfy"
 
-abstract module AbstractDistributedComponent {
-    import opened Types
+abstract module AbstractDistributedSystemSM refines AbstractServiceSM {
     import opened Network : AbstractNetwork
     import Host : AbstractHost
 

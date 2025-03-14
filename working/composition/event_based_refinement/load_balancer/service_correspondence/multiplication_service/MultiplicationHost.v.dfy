@@ -2,7 +2,7 @@ include "MultiplicationServiceSM.t.dfy"
 include "../addition_service/AdditionServiceSM.t.dfy"
 include "../shared/AbstractHost.t.dfy"
 
-module MultiplicationServiceHost refines AbstractHost {
+module MultiplicationHost refines AbstractHost {
     import opened Service = MultiplicationServiceSM
     import AdditionService = AdditionServiceSM
 

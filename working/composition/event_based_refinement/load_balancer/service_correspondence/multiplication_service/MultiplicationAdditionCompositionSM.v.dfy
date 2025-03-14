@@ -1,19 +1,19 @@
-include "MultiplicationServiceComponent.v.dfy"
+include "MultiplicationDistributedSystemSM.v.dfy"
 include "../addition_service/AdditionServiceSM.t.dfy"
 include "../shared/AbstractNetwork.t.dfy"
+include "../shared/AbstractServiceSM.t.dfy"
 
 module ComposedNetwork refines AbstractNetwork {
 }
 
-module MultiplicationService {
-    import opened Types
+module MultiplicationAdditionCompositionSM refines AbstractServiceSM {
     import opened ComposedNetwork = Network
-    import MultSvc = MultiplicationServiceComponent
-    import AddSvc = AdditionServiceSM
+    import MultSM = MultiplicationDistributedSystemSM
+    import AddSM = AdditionServiceSM
 
     datatype Constants = Constants(
-        multSvc: MultSvc.Constants,
-        addSvc: AddSvc.Constants,
+        multSvc: MultSM.Constants,
+        addSvc: AddSM.Constants,
         network: ComposedNetwork.Constants) 
     {
         ghost predicate WF() 
@@ -26,8 +26,8 @@ module MultiplicationService {
     }
 
     datatype Variables = Variables(
-        multSvc: MultSvc.Variables,
-        addSvc: AddSvc.Variables,
+        multSvc: MultSM.Variables,
+        addSvc: AddSM.Variables,
         network: ComposedNetwork.Variables) 
     {
         ghost predicate WF(c: Constants) {
@@ -39,8 +39,8 @@ module MultiplicationService {
 
     ghost predicate Init(c: Constants, v: Variables) {
         && v.WF(c)
-        && MultSvc.Init(c.multSvc, v.multSvc)
-        && AddSvc.Init(c.addSvc, v.addSvc)
+        && MultSM.Init(c.multSvc, v.multSvc)
+        && AddSM.Init(c.addSvc, v.addSvc)
         && ComposedNetwork.Init(c.network, v.network)
     }
 
@@ -48,7 +48,7 @@ module MultiplicationService {
     {
         && v.WF(c)
         && v'.WF(c)
-        && MultSvc.Next(c.multSvc, v.multSvc, v'.multSvc, msgOps)
+        && MultSM.Next(c.multSvc, v.multSvc, v'.multSvc, msgOps)
         && v.addSvc == v'.addSvc
         && ComposedNetwork.Next(c.network, v.network, v'.network, msgOps, hostId)
         && hostId == c.multSvc.hosts[0].idSelf
@@ -58,7 +58,7 @@ module MultiplicationService {
     {
         && v.WF(c)
         && v'.WF(c)
-        && AddSvc.Next(c.addSvc, v.addSvc, v'.addSvc, msgOps)
+        && AddSM.Next(c.addSvc, v.addSvc, v'.addSvc, msgOps)
         && v.multSvc == v'.multSvc
         && ComposedNetwork.Next(c.network, v.network, v'.network, msgOps, hostId)
         && hostId == c.addSvc.idSelf
