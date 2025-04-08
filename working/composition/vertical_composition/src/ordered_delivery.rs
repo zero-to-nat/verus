@@ -175,43 +175,38 @@ impl<S, T, Svc: Service<S, T>> OrderedDelivery<S, T, Svc> {
         &&& (forall |i| self.buffer@.dom().contains(i) ==> #[trigger] self.buffer@[i].seqNo == i)
         &&& (forall |i| self.buffer@.dom().contains(i) ==> self.next_seq_no < #[trigger] self.buffer@[i].seqNo)
         &&& self.next_seq_no == self.delivered_tok@.value().len()
-        &&& self.delivered_tok@.value().len() == Svc::requests_to_seq(self.inner_svc.requests()).len()
-        &&& (forall |i| 0 <= i < self.delivered_tok@.value().len() ==> #[trigger] self.delivered_tok@.value()[i].val == Svc::requests_to_seq(self.inner_svc.requests())[i])
-        &&& self.replies_tok@.value().len() == Svc::replies_to_seq(self.inner_svc.replies()).len()
-        &&& (forall |i| 0 <= i < self.replies_tok@.value().len() ==> #[trigger] self.replies_tok@.value()[i].val == Svc::replies_to_seq(self.inner_svc.replies())[i])
+        &&& self.delivered_tok@.value().len() == Svc::abs(self.inner_svc.requests(), self.inner_svc.replies()).requests.len()
+        &&& (forall |i| 0 <= i < self.delivered_tok@.value().len() ==> #[trigger] self.delivered_tok@.value()[i].val == Svc::abs(self.inner_svc.requests(), self.inner_svc.replies()).requests[i])
+        &&& self.replies_tok@.value().len() == Svc::abs(self.inner_svc.requests(), self.inner_svc.replies()).replies.len()
+        &&& (forall |i| 0 <= i < self.replies_tok@.value().len() ==> #[trigger] self.replies_tok@.value()[i].val == Svc::abs(self.inner_svc.requests(), self.inner_svc.replies()).replies[i])
     }
 
     pub closed spec fn id(&self) -> InstanceId {
         self.inst@.id()
     }
 
-    pub closed spec fn requests(&self) -> OrderedDeliverySM::requests<S, T> {
-        self.requests_tok@
+    pub closed spec fn requests(&self) -> Tracked<OrderedDeliverySM::requests<S, T>> {
+        self.requests_tok
     }
 
-    pub closed spec fn replies(&self) -> OrderedDeliverySM::replies<S, T> {
-        self.replies_tok@
-    }
-
-    pub closed spec fn requests_to_seq(requests: OrderedDeliverySM::requests<S, T>) -> Seq<OrderedMessage<S>> {
-        requests.value()
-    }
-
-    pub closed spec fn replies_to_seq(replies: OrderedDeliverySM::replies<S, T>) -> Seq<OrderedMessage<T>> {
-        replies.value()
+    pub closed spec fn replies(&self) -> Tracked<OrderedDeliverySM::replies<S, T>> {
+        self.replies_tok
     }
 
     pub fn init(inner_svc: Svc) -> (out: Self)
         requires
             inner_svc.inv(),
-            Svc::requests_to_seq(inner_svc.requests()) == Seq::<S>::empty(),
-            Svc::replies_to_seq(inner_svc.replies()) == Seq::<T>::empty()
+            ServiceSM::State::init(Svc::abs(inner_svc.requests(), inner_svc.replies()))
         ensures
             out.inv(),
-            Self::requests_to_seq(out.requests()) == Seq::<OrderedMessage<S>>::empty(),
-            Self::replies_to_seq(out.replies()) == Seq::<OrderedMessage<T>>::empty()
+            out.requests()@.value() == Seq::<OrderedMessage<S>>::empty(),
+            out.replies()@.value() == Seq::<OrderedMessage<T>>::empty()
     {
         let mut buffer = HashMap::new();
+
+        proof {
+            Svc::init_lemma(Svc::abs(inner_svc.requests(), inner_svc.replies()));
+        }
 
         let tracked (
             Tracked(inst),
@@ -235,14 +230,16 @@ impl<S, T, Svc: Service<S, T>> OrderedDelivery<S, T, Svc> {
         }
     }
 
+    // todo: Service definition doesn't allow receipt of 0 messages and sending of multiple messages
+    // would like this to refine Service (i.e. implement the Service trait)
     pub fn next(&mut self, req: OrderedMessage<S>) -> (out: Vec<OrderedMessage<T>>)
         requires
             old(self).inv(),
         ensures
             self.inv(),
             old(self).id() == self.id(),
-            Self::replies_to_seq(self.replies()) == Self::replies_to_seq(old(self).replies()).add(out@),
-            (forall |msg| #[trigger] Self::requests_to_seq(old(self).requests()).contains(msg) ==> msg.seqNo != req.seqNo) ==> Self::requests_to_seq(self.requests()) == Self::requests_to_seq(old(self).requests()).push(req)
+            self.replies()@.value() == old(self).replies()@.value().add(out@),
+            (forall |msg| #[trigger] old(self).requests()@.value().contains(msg) ==> msg.seqNo != req.seqNo) ==> self.requests()@.value() == old(self).requests()@.value().push(req)
     {
         let ghost old_buffer = self.buffer@;
         let ghost old_requests = self.requests_tok@.value();
@@ -289,10 +286,10 @@ impl<S, T, Svc: Service<S, T>> OrderedDelivery<S, T, Svc> {
                 (forall |i| self.buffer@.dom().contains(i) ==> #[trigger] self.buffer@[i].seqNo == i),
                 (forall |i| self.buffer@.dom().contains(i) ==> self.next_seq_no <= #[trigger] self.buffer@[i].seqNo),
                 self.next_seq_no == self.delivered_tok@.value().len(),
-                self.delivered_tok@.value().len() == Svc::requests_to_seq(self.inner_svc.requests()).len(),
-                (forall |i| 0 <= i < self.delivered_tok@.value().len() ==> #[trigger] self.delivered_tok@.value()[i].val == Svc::requests_to_seq(self.inner_svc.requests())[i]),
-                self.replies_tok@.value().len() == Svc::replies_to_seq(self.inner_svc.replies()).len(),
-                (forall |i| 0 <= i < self.replies_tok@.value().len() ==> #[trigger] self.replies_tok@.value()[i].val == Svc::replies_to_seq(self.inner_svc.replies())[i]),
+                self.delivered_tok@.value().len() == Svc::abs(self.inner_svc.requests(), self.inner_svc.replies()).requests.len(),
+                (forall |i| 0 <= i < self.delivered_tok@.value().len() ==> #[trigger] self.delivered_tok@.value()[i].val == Svc::abs(self.inner_svc.requests(), self.inner_svc.replies()).requests[i]),
+                self.replies_tok@.value().len() == Svc::abs(self.inner_svc.requests(), self.inner_svc.replies()).replies.len(),
+                (forall |i| 0 <= i < self.replies_tok@.value().len() ==> #[trigger] self.replies_tok@.value()[i].val == Svc::abs(self.inner_svc.requests(), self.inner_svc.replies()).replies[i]),
                 self.replies_tok@.value() == old_replies.add(replies@),
                 self.requests_tok@.value() == old_requests.push(req)
         {

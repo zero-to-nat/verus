@@ -52,23 +52,41 @@ pub trait Service<S, T> : Sized {
     spec fn id(&self) -> InstanceId
         ;
     
-    spec fn requests(&self) -> Self::GhostRequests
+    spec fn requests(&self) -> Tracked<Self::GhostRequests>
         ;
 
-    spec fn replies(&self) -> Self::GhostReplies
+    proof fn borrow_requests(tracked &self) -> (tracked out: &Self::GhostRequests)
+        requires 
+            self.inv()
+        ensures 
+            out == self.requests()@
         ;
 
-    spec fn requests_to_seq(requests: Self::GhostRequests) -> Seq<S>
+    spec fn replies(&self) -> Tracked<Self::GhostReplies>
         ;
 
-    spec fn replies_to_seq(replies: Self::GhostReplies) -> Seq<T>
+    proof fn borrow_replies(tracked &self) -> (tracked out: &Self::GhostReplies)
+        requires 
+            self.inv()
+        ensures 
+            out == self.replies()@
         ;
+
+    /// abstraction function
+    spec fn abs(requests: Tracked<Self::GhostRequests>, replies: Tracked<Self::GhostReplies>) -> ServiceSM::State<S, T>
+        ;
+
+    // todo - why can't we prove this?
+    #[verifier::external_body]
+    proof fn init_lemma(abs_st: ServiceSM::State<S, T>)
+        ensures
+            ServiceSM::State::init(abs_st) <==> abs_st.requests == Seq::<S>::empty() && abs_st.replies == Seq::<T>::empty()
+    {}
 
     fn init() -> (out: Self)
         ensures
             out.inv(),
-            Self::requests_to_seq(out.requests()) == Seq::<S>::empty(),
-            Self::replies_to_seq(out.replies()) == Seq::<T>::empty()
+            ServiceSM::State::init(Self::abs(out.requests(), out.replies()))
     ;
 
     fn next(&mut self, req: &S) -> (out: T)
@@ -77,8 +95,7 @@ pub trait Service<S, T> : Sized {
         ensures
             self.inv(),
             old(self).id() == self.id(),
-            Self::requests_to_seq(self.requests()) == Self::requests_to_seq(old(self).requests()).push(*req),
-            Self::replies_to_seq(self.replies()) == Self::replies_to_seq(old(self).replies()).push(out),
+            ServiceSM::State::next_step(Self::abs(old(self).requests(), old(self).replies()), Self::abs(self.requests(), self.replies()), *req, out),
     ;
 }
 }

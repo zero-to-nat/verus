@@ -102,29 +102,28 @@ impl OrderedKV {
         self.inst@.id()
     }
 
-    pub closed spec fn requests(&self) -> OrderedKVSM::requests<u32, u32> {
-        self.requests_tok@
+    pub closed spec fn requests(&self) -> Tracked<OrderedKVSM::requests<u32, u32>> {
+        self.requests_tok
     }
 
-    pub closed spec fn replies(&self) -> OrderedKVSM::replies<u32, u32> {
-        self.replies_tok@
-    }
-
-    pub closed spec fn requests_to_seq(requests: OrderedKVSM::requests<u32, u32>) -> Seq<OrderedMessage<KVRequest<u32, u32>>> {
-        requests.value()
-    }
-
-    pub closed spec fn replies_to_seq(replies: OrderedKVSM::replies<u32, u32>) -> Seq<OrderedMessage<KVReply<u32, u32>>> {
-        replies.value()
+    pub closed spec fn replies(&self) -> Tracked<OrderedKVSM::replies<u32, u32>> {
+        self.replies_tok
     }
 
     fn init() -> (out: Self)
         ensures
             out.inv(),
-            Self::requests_to_seq(out.requests()) == Seq::<OrderedMessage<KVRequest<u32, u32>>>::empty(),
-            Self::replies_to_seq(out.replies()) == Seq::<OrderedMessage<KVReply<u32, u32>>>::empty()
+            out.requests()@.value() == Seq::<OrderedMessage<KVRequest<u32, u32>>>::empty(),
+            out.replies()@.value() == Seq::<OrderedMessage<KVReply<u32, u32>>>::empty()
     {
         let simple_kv = SimpleKV::init();
+
+        proof {
+            // example of invoking the inner specification's invariant on its abstract state
+            simple_kv.borrow_inst().inv(simple_kv.borrow_requests(), simple_kv.borrow_replies());
+            assert(simple_kv.requests()@.value().len() == simple_kv.replies()@.value().len());
+        }
+
         let ordered_delivery = OrderedDelivery::init(simple_kv);
 
         let tracked (
