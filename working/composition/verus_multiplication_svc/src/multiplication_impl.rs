@@ -6,16 +6,25 @@ use crate::multiplication_service::*;
 verus! {
 
 type GhostMult = ();
-type GhostAdd = (AdditionServiceSM::Instance, AdditionServiceSM::tokens);
 
-pub open spec fn ghost_add_inv<Mshl: Marshall<AdditionRequest, AdditionReply>>(pkt: Packet<Seq<u8>>, ghost: GhostAdd) -> bool {
-    &&& ghost.0.id() == ghost.1.instance_id()
-    &&& Mshl::parse_reply_spec(pkt.msg).is_some()
-    &&& ghost.1.element().1 == Mshl::parse_reply_spec(pkt.msg).unwrap()
+impl GhostInv for GhostMult {
+    open spec fn inv(&self, pkt: Packet<Seq<u8>>) -> bool {
+        true
+    }
+}
+
+type GhostAdd<Mshl: Marshall<AdditionRequest, AdditionReply>> = (AdditionServiceSM::Instance, AdditionServiceSM::tokens, Mshl);
+
+impl<Mshl: Marshall<AdditionRequest, AdditionReply>> GhostInv for GhostAdd<Mshl> {
+    open spec fn inv(&self, pkt: Packet<Seq<u8>>) -> bool {
+        &&& self.0.id() == self.1.instance_id()
+        &&& Mshl::parse_reply_spec(pkt.msg).is_some()
+        &&& self.1.element().1 == Mshl::parse_reply_spec(pkt.msg).unwrap()
+    }
 }
 
 pub struct MultiplicationDSImpl<Mshl: Marshall<AdditionRequest, AdditionReply>> {
-    socket: SimpleSocketImpl<GhostMult, GhostAdd>,
+    socket: SimpleSocketImpl<GhostMult, GhostAdd<Mshl>>,
     marshaller: Mshl,
     self_addr: u32,
     addition_svc_addr: u32,
@@ -92,7 +101,7 @@ impl<Mshl: Marshall<AdditionRequest, AdditionReply>> MultiplicationDSImpl<Mshl> 
         self.inst.borrow()
     }
 
-    pub fn init(marshaller: Mshl, self_addr: u32, addition_svc_addr: u32, socket: SimpleSocketImpl<GhostMult, GhostAdd>) -> (out: (Self))
+    pub fn init(marshaller: Mshl, self_addr: u32, addition_svc_addr: u32, socket: SimpleSocketImpl<GhostMult, GhostAdd<Mshl>>) -> (out: (Self))
         requires
             socket.inv(),
             socket.addrA() == self_addr,
@@ -129,7 +138,7 @@ impl<Mshl: Marshall<AdditionRequest, AdditionReply>> MultiplicationDSImpl<Mshl> 
         }
     }
 
-    fn receive_initial_request(&mut self, req: &MultiplicationRequest, free: Tracked<SimpleSocketSM::free<GhostMult, GhostAdd>>) -> (out: (Tracked<SimpleSocketSM::sent<GhostMult, GhostAdd>>, Tracked<SimpleSocketSM::ghostA<GhostMult, GhostAdd>>))
+    fn receive_initial_request(&mut self, req: &MultiplicationRequest, free: Tracked<SimpleSocketSM::free<GhostMult, GhostAdd<Mshl>>>) -> (out: (Tracked<SimpleSocketSM::sent<GhostMult, GhostAdd<Mshl>>>, Tracked<SimpleSocketSM::ghostA<GhostMult, GhostAdd<Mshl>>>))
         requires
             old(self).inv(),
             old(self).outstanding().is_none(),
@@ -155,8 +164,8 @@ impl<Mshl: Marshall<AdditionRequest, AdditionReply>> MultiplicationDSImpl<Mshl> 
         (Tracked(sent_mult.get()), Tracked(ghost_mult.get()))
     }
 
-    fn receive_intermediate_response(&mut self, pkt: &Packet<Vec<u8>>, sent_add: Tracked<SimpleSocketSM::sent<GhostMult, GhostAdd>>, ghost_tok: Tracked<SimpleSocketSM::ghostB<GhostMult, GhostAdd>>)
-        -> (out: (Tracked<SimpleSocketSM::sent<GhostMult, GhostAdd>>, Tracked<SimpleSocketSM::ghostA<GhostMult, GhostAdd>>))
+    fn receive_intermediate_response(&mut self, pkt: &Packet<Vec<u8>>, sent_add: Tracked<SimpleSocketSM::sent<GhostMult, GhostAdd<Mshl>>>, ghost_tok: Tracked<SimpleSocketSM::ghostB<GhostMult, GhostAdd<Mshl>>>)
+        -> (out: (Tracked<SimpleSocketSM::sent<GhostMult, GhostAdd<Mshl>>>, Tracked<SimpleSocketSM::ghostA<GhostMult, GhostAdd<Mshl>>>))
         requires
             old(self).inv(),
             old(self).outstanding().is_some(),
@@ -164,7 +173,6 @@ impl<Mshl: Marshall<AdditionRequest, AdditionReply>> MultiplicationDSImpl<Mshl> 
             sent_add@.instance_id() == old(self).socket_id(),
             ghost_tok@.instance_id() == old(self).socket_id(),
             sent_add@.value() == pkt@,
-            ghost_add_inv::<Mshl>(pkt@, ghost_tok@.value()),
             Mshl::parse_reply_spec(pkt.msg@).unwrap().id == old(self).next_id()
         ensures
             self.inv(),
@@ -175,15 +183,19 @@ impl<Mshl: Marshall<AdditionRequest, AdditionReply>> MultiplicationDSImpl<Mshl> 
             self.socket_id() == out.1@.instance_id(),
             old(self).abs() == self.abs()
     {
-        let parsed_resp = self.marshaller.parse_reply(&pkt.msg).unwrap();
         let tracked mut recv_tup;
         proof {
             recv_tup = SimpleSocketImpl::recvB(self.socket.borrow_inst(), pkt@, sent_add.get(), ghost_tok.get());
+        }
+        let parsed_resp = self.marshaller.parse_reply(&pkt.msg).unwrap();
+        
+        proof {
 
-            let tracked (add_inst, add_tok) = recv_tup.1;
+            let tracked (add_inst, add_tok, _) = recv_tup.1;
             add_inst.service_correspondence(add_tok.element(), &add_tok);
             assert(self.in_flight@.unwrap().id == add_tok.element().0.id);
-            assume(add_tok.element().0 == self.in_flight@.unwrap()); // todo - need stronger assumptions about network?
+            // todo - need stronger assumptions about network?
+            assume(add_tok.element().0 == self.in_flight@.unwrap()); 
             assert(parsed_resp.sum == self.in_flight@.unwrap().x + self.outstanding.unwrap().y);
             assert(self.in_flight@.unwrap().x == self.intermediate_results.len() * self.outstanding.unwrap().y) by {
                 if (self.intermediate_results.len() == 0) {
@@ -193,7 +205,8 @@ impl<Mshl: Marshall<AdditionRequest, AdditionReply>> MultiplicationDSImpl<Mshl> 
                     assert(self.intermediate_results[self.intermediate_results.len()-1].sum == (self.intermediate_results.len()) * self.outstanding.unwrap().y);
                 }
             };
-            assume(self.intermediate_results.len() * self.outstanding.unwrap().y + self.outstanding.unwrap().y == (self.intermediate_results.len()+1) * self.outstanding.unwrap().y); // todo - distributivity
+            // todo - distributivity
+            assume(self.intermediate_results.len() * self.outstanding.unwrap().y + self.outstanding.unwrap().y == (self.intermediate_results.len()+1) * self.outstanding.unwrap().y); 
         }
         self.intermediate_results.push(parsed_resp);
         assume(0 <= self.next_id + 1 < u32::MAX);
@@ -206,7 +219,7 @@ impl<Mshl: Marshall<AdditionRequest, AdditionReply>> MultiplicationDSImpl<Mshl> 
         (Tracked(sent_mult.get()), Tracked(ghost_mult.get()))
     }
 
-    fn receive_final_response(&mut self, pkt: &Packet<Vec<u8>>, sent_add: Tracked<SimpleSocketSM::sent<GhostMult, GhostAdd>>, ghost_tok: Tracked<SimpleSocketSM::ghostB<GhostMult, GhostAdd>>)
+    fn receive_final_response(&mut self, pkt: &Packet<Vec<u8>>, sent_add: Tracked<SimpleSocketSM::sent<GhostMult, GhostAdd<Mshl>>>, ghost_tok: Tracked<SimpleSocketSM::ghostB<GhostMult, GhostAdd<Mshl>>>)
         -> (out: (MultiplicationReply, Tracked<MultiplicationServiceSM::tokens>))
         requires
             old(self).inv(),
@@ -215,7 +228,6 @@ impl<Mshl: Marshall<AdditionRequest, AdditionReply>> MultiplicationDSImpl<Mshl> 
             sent_add@.instance_id() == old(self).socket_id(),
             ghost_tok@.instance_id() == old(self).socket_id(),
             sent_add@.value() == pkt@,
-            ghost_add_inv::<Mshl>(pkt@, ghost_tok@.value()),
             Mshl::parse_reply_spec(pkt.msg@).unwrap().id == old(self).next_id()
         ensures
             self.inv(),
@@ -226,12 +238,14 @@ impl<Mshl: Marshall<AdditionRequest, AdditionReply>> MultiplicationDSImpl<Mshl> 
             out.1@.element() == (old(self).outstanding().unwrap(), out.0),
             out.1@.instance_id() == self.id()
     {
-        let parsed_resp = self.marshaller.parse_reply(&pkt.msg).unwrap();
         let tracked mut recv_tup;
         proof {
             recv_tup = SimpleSocketImpl::recvB(self.socket.borrow_inst(), pkt@, sent_add.get(), ghost_tok.get());
-
-            let tracked (add_inst, add_tok) = recv_tup.1;
+        }
+        let parsed_resp = self.marshaller.parse_reply(&pkt.msg).unwrap();
+        
+        proof {
+            let tracked (add_inst, add_tok, _) = recv_tup.1;
             add_inst.service_correspondence(add_tok.element(), &add_tok);
             assert(self.in_flight@.unwrap().id == add_tok.element().0.id);
              // todo - need stronger assumptions about network?

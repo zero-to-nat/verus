@@ -67,9 +67,14 @@ pub trait Marshall<S, T> {
     ;
 }
 
+pub trait GhostInv {
+    spec fn inv(&self, pkt: Packet<Seq<u8>>) -> bool
+        ;
+}
+
 // Simple socket protocol. Only one message in flight at a time
 tokenized_state_machine! {
-    SimpleSocketSM<GhostA, GhostB> {
+    SimpleSocketSM<GhostA: GhostInv, GhostB: GhostInv> {
         fields {
             #[sharding(constant)]
             pub addrA: u32,
@@ -138,6 +143,7 @@ tokenized_state_machine! {
                 remove free -= true;
                 require msg.src == pre.addrA;
                 require msg.dst == pre.addrB;
+                require ghost.inv(msg);
                 add sent += Some(msg);
                 add ghostA += Some(ghost);
                 deposit guardA += Some(ghost);
@@ -151,6 +157,9 @@ tokenized_state_machine! {
                 remove sent -= Some(msg);
                 remove ghostA -= Some(ghost);
                 withdraw guardA -= Some(ghost);
+                assert ghost.inv(msg) by {
+                    assert(pre.inv());
+                };
                 add free += true;
             }
         }
@@ -160,6 +169,7 @@ tokenized_state_machine! {
                 remove free -= true;
                 require msg.src == pre.addrB;
                 require msg.dst == pre.addrA;
+                require ghost.inv(msg);
                 add sent += Some(msg);
                 add ghostB += Some(ghost);
                 deposit guardB += Some(ghost);
@@ -173,6 +183,9 @@ tokenized_state_machine! {
                 remove sent -= Some(msg);
                 remove ghostB -= Some(ghost);
                 withdraw guardB -= Some(ghost);
+                assert ghost.inv(msg) by {
+                    assert(pre.inv());
+                };
                 add free += true;
             }
         }
@@ -187,8 +200,14 @@ tokenized_state_machine! {
                 &&& self.sent.unwrap().src == self.addrA ==> self.sent.unwrap().dst == self.addrB && self.ghostA.is_some()
                 &&& self.sent.unwrap().src == self.addrB ==> self.sent.unwrap().dst == self.addrA && self.ghostB.is_some()
             }
-            &&& self.ghostA.is_some() ==> self.sent.unwrap().src == self.addrA
-            &&& self.ghostB.is_some() ==> self.sent.unwrap().src == self.addrB
+            &&& self.ghostA.is_some() ==> {
+                &&& self.sent.unwrap().src == self.addrA
+                &&& self.ghostA.unwrap().inv(self.sent.unwrap())
+            }
+            &&& self.ghostB.is_some() ==> {
+                &&& self.sent.unwrap().src == self.addrB
+                &&& self.ghostB.unwrap().inv(self.sent.unwrap())
+            }
             &&& !(self.ghostA.is_some() && self.ghostB.is_some())
             &&& self.sent.is_some() <==> !self.free
             &&& self.guardA.is_none() <==> self.ghostA.is_none()
@@ -214,11 +233,11 @@ tokenized_state_machine! {
     }
 }
 
-pub struct SimpleSocketImpl<GhostA, GhostB> {
+pub struct SimpleSocketImpl<GhostA: GhostInv, GhostB: GhostInv> {
     inst: Tracked<SimpleSocketSM::Instance<GhostA, GhostB>>
 }
 
-impl<GhostA, GhostB> SimpleSocketImpl<GhostA, GhostB> {
+impl<GhostA: GhostInv, GhostB: GhostInv> SimpleSocketImpl<GhostA, GhostB> {
     pub closed spec fn inv(&self) -> bool {
         true
     }
@@ -273,7 +292,8 @@ impl<GhostA, GhostB> SimpleSocketImpl<GhostA, GhostB> {
             old(self).inv(),
             req.src == old(self).addrA(),
             req.dst == old(self).addrB(),
-            free@.instance_id() == old(self).id()
+            free@.instance_id() == old(self).id(),
+            ghost@.inv(req@)
         ensures
             self.inv(),
             old(self).id() == self.id(),
@@ -307,12 +327,13 @@ impl<GhostA, GhostB> SimpleSocketImpl<GhostA, GhostB> {
         (Tracked(free.get()), Tracked(ghost.get()))
     }
 
-    pub fn sendB(&mut self, req: &Packet<Vec<u8>>, tracked ghost: GhostB, free: Tracked<SimpleSocketSM::free<GhostA, GhostB>>) -> (out: (Tracked<SimpleSocketSM::sent<GhostA, GhostB>>, Tracked<SimpleSocketSM::ghostB<GhostA, GhostB>>))
+    pub fn sendB(&mut self, req: &Packet<Vec<u8>>, ghost: Tracked<GhostB>, free: Tracked<SimpleSocketSM::free<GhostA, GhostB>>) -> (out: (Tracked<SimpleSocketSM::sent<GhostA, GhostB>>, Tracked<SimpleSocketSM::ghostB<GhostA, GhostB>>))
         requires 
             old(self).inv(),
             req.src == old(self).addrB(),
             req.dst == old(self).addrA(),
-            free@.instance_id() == old(self).id()
+            free@.instance_id() == old(self).id(),
+            ghost@.inv(req@)
         ensures
             self.inv(),
             old(self).id() == self.id(),
@@ -323,7 +344,7 @@ impl<GhostA, GhostB> SimpleSocketImpl<GhostA, GhostB> {
             self.id() == out.1@.instance_id(),
             out.1@.value() == ghost
     {
-        let tracked(sent, ghost_tok) = self.inst.borrow().sendB(req@, ghost, free.get(), ghost);
+        let tracked(sent, ghost_tok) = self.inst.borrow().sendB(req@, ghost@, free.get(), ghost.get());
         (Tracked(sent.get()), Tracked(ghost_tok.get()))
     }
 
@@ -334,7 +355,8 @@ impl<GhostA, GhostB> SimpleSocketImpl<GhostA, GhostB> {
             sent.value() == req,
         ensures
             inst.id() == out.0.instance_id(),
-            ghost_tok.value() == out.1
+            ghost_tok.value() == out.1,
+            out.1.inv(req)
     {
         let tracked _ = inst.invB(req, ghost_tok.value(), &sent, &ghost_tok);
         let tracked(free, ghost) = inst.recvB(req, ghost_tok.value(), sent, ghost_tok);
