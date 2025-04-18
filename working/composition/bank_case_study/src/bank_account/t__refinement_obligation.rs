@@ -1,7 +1,7 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
 use crate::model::t__abstract_service::*;
-use crate::model::t__abstract_host::*;
+use crate::model::abstract_host::*;
 use crate::model::t__network::*;
 use crate::addition::t__service::*;
 use crate::subtraction::t__service::*;
@@ -24,17 +24,15 @@ pub trait RefinementObligation
             BankAccountComposition::init(c, post)
         ensures 
             BankAccountService::init(Self::c_abs(c.0), Self::abs(post.host())),
-            Self::abs(post.host()).constants().ids() == post.host().constants().ids()
         ;
     
     proof fn refinement_next(pre: BankAccountComposition, post: BankAccountComposition, msg_ops: MessageOps)
         requires 
             BankAccountComposition::next(pre, post, msg_ops),
             BankAccountComposition::inv(pre),
-            Self::abs(post.host()).constants().ids() == post.host().constants().ids()
         ensures 
-            BankAccountService::next(Self::abs(pre.host()), Self::abs(post.host()), msg_ops) || AbstractService::stutter(Self::abs(pre.host()), Self::abs(post.host()), msg_ops),
-            Self::abs(post.host()).constants().ids() == post.host().constants().ids()
+            BankAccountService::next(Self::abs(pre.host()), Self::abs(post.host()), msg_ops) 
+            || AbstractService::stutter(Self::abs(pre.host()), Self::abs(post.host()), msg_ops),
         ;
 }
 }

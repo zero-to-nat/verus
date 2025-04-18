@@ -1,7 +1,7 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
 use crate::model::t__abstract_service::*;
-use crate::model::t__abstract_host::*;
+use crate::model::abstract_host::*;
 use crate::model::t__network::*;
 use crate::addition::t__service::*;
 use crate::subtraction::t__service::*;
@@ -70,7 +70,7 @@ impl RefinementObligation for BankAccountComposition
                 assert(msg_ops.send.contains(send));
                 assert(AbstractService::is_service_reply(Self::abs(pre.host()), send, msg_ops.send));
 
-                // apply addition impl
+                // apply addition invariants
                 assert(msg_ops.recv.contains(recv));
                 assert(pre.addition_service().constants().ids().contains(recv.src)); 
                 assert(pre.network.sent_msgs.contains(recv));
@@ -104,7 +104,7 @@ impl RefinementObligation for BankAccountComposition
                 assert(msg_ops.send.contains(send));
                 assert(AbstractService::is_service_reply(Self::abs(pre.host()), send, msg_ops.send));
 
-                // apply subtraction impl
+                // apply subtraction invariants
                 assert(msg_ops.recv.contains(recv));
                 assert(pre.subtraction_service().constants().ids().contains(recv.src)); 
                 assert(pre.network.sent_msgs.contains(recv));

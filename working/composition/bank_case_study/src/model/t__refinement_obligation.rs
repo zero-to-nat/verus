@@ -1,7 +1,7 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
 use crate::model::t__abstract_service::*;
-use crate::model::t__abstract_host::*;
+use crate::model::abstract_host::*;
 use crate::model::t__network::*;
 use crate::model::t__abstract_composition::*;
 
@@ -25,17 +25,14 @@ pub trait RefinementObligation<HSC: ServiceConstants,
             Self::init(c, post)
         ensures 
             HS::init(Self::c_abs(c.0), Self::abs(post.host())),
-            Self::abs(post.host()).constants().ids() == post.host().constants().ids()
         ;
     
     proof fn refinement_next(pre: Self, post: Self, msg_ops: MessageOps)
         requires 
             Self::next(pre, post, msg_ops),
             Self::inv(pre),
-            Self::abs(post.host()).constants().ids() == post.host().constants().ids()
         ensures 
             HS::next(Self::abs(pre.host()), Self::abs(post.host()), msg_ops) || AbstractService::stutter(Self::abs(pre.host()), Self::abs(post.host()), msg_ops),
-            Self::abs(post.host()).constants().ids() == post.host().constants().ids()
         ;
 }
 }
