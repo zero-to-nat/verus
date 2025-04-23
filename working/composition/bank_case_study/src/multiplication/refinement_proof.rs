@@ -35,11 +35,11 @@ for InductiveMultiplication
     {
         Self::next_inv(pre, post, msg_ops);
 
-        let id = choose |id| {
-            ||| AbstractSingleServiceComposition::host_step(pre, post, msg_ops, id)
-            ||| AbstractSingleServiceComposition::service_step(pre, post, msg_ops, id)
+        let (id, other_msgs) = choose |id, other_msgs| {
+            ||| AbstractSingleServiceComposition::host_step(pre, post, msg_ops, id, other_msgs)
+            ||| AbstractSingleServiceComposition::service_step(pre, post, msg_ops, id, other_msgs)
         };
-        if (AbstractSingleServiceComposition::host_step(pre, post, msg_ops, id)) {
+        if (AbstractSingleServiceComposition::host_step(pre, post, msg_ops, id, other_msgs)) {
             if (MultiplicationHost::receive_request(pre.host, post.host, msg_ops)) {
                 let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| MultiplicationHost::receive_request_impl(pre.host, post.host, msg_ops, recv, send);
                 assert(msg_ops.recv.contains(recv));
@@ -61,7 +61,7 @@ for InductiveMultiplication
                 let mult_reply = send.replace_msg(MultiplicationService::parse_reply_spec(send.msg).unwrap());
                 let mult_request = pre.host.seq_no_assgn[add_reply.msg.seq_no];
                 let m = choose |m: Message<Seq<u8>>| {
-                    &&& #[trigger] AbstractService::is_service_request(Self::abs(post.host()), m, post.network.sent_msgs.union(post.network.external_msgs))
+                    &&& #[trigger] AbstractService::is_service_request(Self::abs(post.host()), m, post.network.sent_msgs)
                     &&& mult_request == m.replace_msg(MultiplicationService::parse_request_spec(m.msg).unwrap())
                 };
                 assert(msg_ops.send.contains(send));
@@ -75,7 +75,7 @@ for InductiveMultiplication
                 
                 let m2 = choose |m2: Message<Seq<u8>>| {
                     let req = m2.replace_msg(AdditionService::parse_request_spec(m2.msg).unwrap());
-                    &&& #[trigger] AbstractService::<AdditionServiceConstants, AdditionService>::is_service_request(pre.service, m2, pre.network.sent_msgs.union(pre.network.external_msgs))
+                    &&& #[trigger] AbstractService::<AdditionServiceConstants, AdditionService>::is_service_request(pre.service, m2, pre.network.sent_msgs)
                     &&& post.service.requests().contains(req)
                     &&& add_reply.msg.seq_no == req.msg.seq_no
                     &&& add_reply.msg.sum == req.msg.x + req.msg.y
@@ -89,9 +89,9 @@ for InductiveMultiplication
                 assert(MultiplicationService::send_response_impl(Self::abs(pre.host()), Self::abs(post.host()), msg_ops, mult_request, send));
             }
         } else {
-            assert(AbstractSingleServiceComposition::service_step(pre, post, msg_ops, id));
+            assert(AbstractSingleServiceComposition::service_step(pre, post, msg_ops, id, other_msgs));
             let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| AdditionService::add_impl(pre.service, post.service, msg_ops, recv, send);
-            assert(pre.network.sent_msgs.contains(recv) || pre.network.external_msgs.contains(recv));
+            assert(pre.network.sent_msgs.contains(recv));
             assert(AbstractService::stutter(Self::abs(pre.host()), Self::abs(post.host()), msg_ops));
         }
     }

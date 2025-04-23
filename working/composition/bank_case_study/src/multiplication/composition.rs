@@ -1,7 +1,7 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
 use crate::model::t__abstract_service::*;
-use crate::model::abstract_host::*;
+use crate::model::t__abstract_host::*;
 use crate::model::t__network::*;
 use crate::model::t__abstract_composition::*;
 use crate::addition::t__service::*;
@@ -56,7 +56,7 @@ impl InductiveMultiplication {
             exists |m2: Message<Seq<u8>>| {
                 let repl = m.replace_msg(AdditionService::parse_reply_spec(m.msg).unwrap());
                 let req = m2.replace_msg(AdditionService::parse_request_spec(m2.msg).unwrap());
-                &&& #[trigger] AbstractService::is_service_request(s.service(), m2, s.network().sent_msgs.union(s.network().external_msgs))
+                &&& #[trigger] AbstractService::is_service_request(s.service(), m2, s.network().sent_msgs)
                 &&& s.service().requests().contains(req)
                 &&& repl.msg.seq_no == req.msg.seq_no
                 &&& repl.msg.sum == req.msg.x + req.msg.y
@@ -86,7 +86,7 @@ impl InductiveMultiplication {
         forall |req| #[trigger] s.host().requests.contains(req) ==> {
             exists |m: Message<Seq<u8>>| {
                 &&& req == m.replace_msg(MultiplicationService::parse_request_spec(m.msg).unwrap())
-                &&& #[trigger] AbstractService::is_service_request(Self::abs(s.host()), m, s.network().sent_msgs.union(s.network().external_msgs))
+                &&& #[trigger] AbstractService::is_service_request(Self::abs(s.host()), m, s.network().sent_msgs)
             } 
         }
     }
@@ -131,14 +131,14 @@ for InductiveMultiplication {
             assert(AbstractSingleServiceComposition::inv(post));
         }
 
-        let id = choose |id| {
-            ||| AbstractSingleServiceComposition::host_step(pre, post, msg_ops, id)
-            ||| AbstractSingleServiceComposition::service_step(pre, post, msg_ops, id)
+        let (id, other_msgs) = choose |id, other_msgs| {
+            ||| AbstractSingleServiceComposition::host_step(pre, post, msg_ops, id, other_msgs)
+            ||| AbstractSingleServiceComposition::service_step(pre, post, msg_ops, id, other_msgs)
         };
         assert forall |m: Message<Seq<u8>>| post.network().sent_msgs.contains(m) && AdditionService::parse_request_spec(m.msg).is_some() && m.src == post.host().constants().id_self && m.dest == post.host().constants().id_addition_service implies
             #[trigger] Self::inv_mult_inductive_impl(post, m)
         by {
-            if (AbstractSingleServiceComposition::host_step(pre, post, msg_ops, id)) {
+            if (AbstractSingleServiceComposition::host_step(pre, post, msg_ops, id, other_msgs)) {
                 if (MultiplicationHost::receive_request(pre.host, post.host, msg_ops)) {
                     if (pre.network().sent_msgs.contains(m)) {
                         assert(Self::inv_mult_inductive_impl(pre, m));
@@ -170,7 +170,7 @@ for InductiveMultiplication {
                         assert(Self::inv_add_svc(pre));
                         let m2 = choose |m2: Message<Seq<u8>>| {
                             let req = m2.replace_msg(AdditionService::parse_request_spec(m2.msg).unwrap());
-                            &&& #[trigger] AbstractService::<AdditionServiceConstants, AdditionService>::is_service_request(pre.service, m2, pre.network().sent_msgs.union(pre.network().external_msgs))
+                            &&& #[trigger] AbstractService::<AdditionServiceConstants, AdditionService>::is_service_request(pre.service, m2, pre.network().sent_msgs)
                             &&& post.service().requests().contains(req)
                             &&& add_reply.msg.seq_no == req.msg.seq_no
                             &&& add_reply.msg.sum == req.msg.x + req.msg.y
@@ -203,7 +203,7 @@ for InductiveMultiplication {
                     assert(Self::inv_mult_inductive_impl(pre, m));
                 }
             } else {
-                assert(AbstractSingleServiceComposition::service_step(pre, post, msg_ops, id));
+                assert(AbstractSingleServiceComposition::service_step(pre, post, msg_ops, id, other_msgs));
                 assert(pre.network().sent_msgs.contains(m));
                 assert(Self::inv_mult_inductive_impl(pre, m));
             }
@@ -212,20 +212,20 @@ for InductiveMultiplication {
         assert forall |req| #[trigger] post.host().requests.contains(req) implies {
             exists |m: Message<Seq<u8>>| {
                 &&& req == m.replace_msg(MultiplicationService::parse_request_spec(m.msg).unwrap())
-                &&& #[trigger] AbstractService::is_service_request(Self::abs(post.host()), m, post.network().sent_msgs.union(post.network().external_msgs))
+                &&& #[trigger] AbstractService::is_service_request(Self::abs(post.host()), m, post.network().sent_msgs)
             } 
         } by {
             if (pre.host().requests.contains(req)) {
                 let m = choose |m: Message<Seq<u8>>| {
                     &&& req == m.replace_msg(MultiplicationService::parse_request_spec(m.msg).unwrap())
-                    &&& #[trigger] AbstractService::is_service_request(Self::abs(pre.host()), m, pre.network().sent_msgs.union(pre.network().external_msgs))
+                    &&& #[trigger] AbstractService::is_service_request(Self::abs(pre.host()), m, pre.network().sent_msgs)
                 };
-                assert(AbstractService::is_service_request(Self::abs(post.host()), m, post.network().sent_msgs.union(post.network().external_msgs)));
+                assert(AbstractService::is_service_request(Self::abs(post.host()), m, post.network().sent_msgs));
             } else {
                 assert(MultiplicationHost::receive_request(pre.host, post.host, msg_ops));
                 let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| MultiplicationHost::receive_request_impl(pre.host, post.host, msg_ops, recv, send);
                 assert(msg_ops.recv.contains(recv));
-                assert(AbstractService::is_service_request(Self::abs(post.host()), recv, post.network().sent_msgs.union(post.network().external_msgs)));
+                assert(AbstractService::is_service_request(Self::abs(post.host()), recv, post.network().sent_msgs));
             }
         }
     }

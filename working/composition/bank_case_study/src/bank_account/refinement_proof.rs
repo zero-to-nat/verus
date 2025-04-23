@@ -1,7 +1,7 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
 use crate::model::t__abstract_service::*;
-use crate::model::abstract_host::*;
+use crate::model::t__abstract_host::*;
 use crate::model::t__network::*;
 use crate::addition::t__service::*;
 use crate::subtraction::t__service::*;
@@ -50,12 +50,12 @@ impl RefinementObligation for BankAccountComposition
     { 
         Self::next_inv(pre, post, msg_ops);
 
-        let id = choose |id| {
-            ||| Self::host_step(pre, post, msg_ops, id)
-            ||| Self::addition_service_step(pre, post, msg_ops, id)
-            ||| Self::subtraction_service_step(pre, post, msg_ops, id)
+        let (id, external_msgs) = choose |id, external_msgs| {
+            ||| Self::host_step(pre, post, msg_ops, id, external_msgs)
+            ||| Self::addition_service_step(pre, post, msg_ops, id, external_msgs)
+            ||| Self::subtraction_service_step(pre, post, msg_ops, id, external_msgs)
         };
-        if (Self::host_step(pre, post, msg_ops, id)) {
+        if (Self::host_step(pre, post, msg_ops, id, external_msgs)) {
             if (BankAccountHost::receive_request(pre.host, post.host, msg_ops)) {
                 let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| BankAccountHost::receive_request_impl(pre.host, post.host, msg_ops, recv, send);
                 assert(msg_ops.recv.contains(recv));
@@ -86,7 +86,7 @@ impl RefinementObligation for BankAccountComposition
                     &&& addition_reply.src == req.dest
                 };
                 let m = choose |m: Message<Seq<u8>>| {
-                    &&& AbstractService::is_service_request(pre.addition_service(), m, pre.network().sent_msgs.union(pre.network().external_msgs))
+                    &&& AbstractService::is_service_request(pre.addition_service(), m, pre.network().sent_msgs)
                     &&& addition_request == #[trigger] m.replace_msg(AdditionService::parse_request_spec(m.msg).unwrap()) 
                 };
 
@@ -120,7 +120,7 @@ impl RefinementObligation for BankAccountComposition
                     &&& subtraction_reply.src == req.dest
                 };
                 let m = choose |m: Message<Seq<u8>>| {
-                    &&& AbstractService::is_service_request(pre.subtraction_service(), m, pre.network().sent_msgs.union(pre.network().external_msgs))
+                    &&& AbstractService::is_service_request(pre.subtraction_service(), m, pre.network().sent_msgs)
                     &&& subtraction_request == #[trigger] m.replace_msg(SubtractionService::parse_request_spec(m.msg).unwrap()) 
                 };
 
@@ -131,14 +131,14 @@ impl RefinementObligation for BankAccountComposition
                     assert(false);
                 }
             }
-        } else if (Self::addition_service_step(pre, post, msg_ops, id)) {
+        } else if (Self::addition_service_step(pre, post, msg_ops, id, external_msgs)) {
             let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| AdditionService::add_impl(pre.addition_service(), post.addition_service(), msg_ops, recv, send);
-            assert(pre.network.sent_msgs.contains(recv) || pre.network.external_msgs.contains(recv));
+            assert(pre.network.sent_msgs.contains(recv));
             assert(AbstractService::stutter(Self::abs(pre.host()), Self::abs(post.host()), msg_ops));
         } else {
-            assert(Self::subtraction_service_step(pre, post, msg_ops, id));
+            assert(Self::subtraction_service_step(pre, post, msg_ops, id, external_msgs));
             let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| SubtractionService::subtract_impl(pre.subtraction_service(), post.subtraction_service(), msg_ops, recv, send);
-            assert(pre.network.sent_msgs.contains(recv) || pre.network.external_msgs.contains(recv));
+            assert(pre.network.sent_msgs.contains(recv));
             assert(AbstractService::stutter(Self::abs(pre.host()), Self::abs(post.host()), msg_ops));
         }
     }

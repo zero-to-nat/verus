@@ -1,7 +1,7 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
 use crate::model::t__abstract_service::*;
-use crate::model::abstract_host::*;
+use crate::model::t__abstract_host::*;
 use crate::model::t__network::*;
 use crate::model::t__abstract_composition::*;
 

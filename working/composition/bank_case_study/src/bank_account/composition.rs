@@ -1,7 +1,7 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
 use crate::model::t__abstract_service::*;
-use crate::model::abstract_host::*;
+use crate::model::t__abstract_host::*;
 use crate::model::t__network::*;
 use crate::addition::t__service::*;
 use crate::subtraction::t__service::*;
@@ -13,7 +13,6 @@ verus! {
 
 impl BankAccountComposition {
     pub open spec fn inv_abs(s: Self) -> bool {
-        &&& s.network().constants.hosts == s.host().constants().ids().union(s.addition_service().constants().ids()).union(s.subtraction_service().constants().ids())
         &&& s.host().constants().ids().disjoint(s.addition_service().constants().ids())
         &&& s.host().constants().ids().disjoint(s.subtraction_service().constants().ids())
         &&& s.addition_service().constants().ids().disjoint(s.subtraction_service().constants().ids())
@@ -35,7 +34,7 @@ impl BankAccountComposition {
         })
         &&& (forall |req| #[trigger] s.addition_service().requests().contains(req) ==> {
             exists |m: Message<Seq<u8>>| {
-                &&& AbstractService::is_service_request(s.addition_service(), m, s.network().sent_msgs.union(s.network().external_msgs))
+                &&& AbstractService::is_service_request(s.addition_service(), m, s.network().sent_msgs)
                 &&& req == #[trigger] m.replace_msg(AdditionService::parse_request_spec(m.msg).unwrap()) 
             }
         })
@@ -49,7 +48,7 @@ impl BankAccountComposition {
         })
         &&& (forall |req| #[trigger] s.subtraction_service().requests().contains(req) ==> {
             exists |m: Message<Seq<u8>>| {
-                &&& AbstractService::is_service_request(s.subtraction_service(), m, s.network().sent_msgs.union(s.network().external_msgs))
+                &&& AbstractService::is_service_request(s.subtraction_service(), m, s.network().sent_msgs)
                 &&& req == #[trigger] m.replace_msg(SubtractionService::parse_request_spec(m.msg).unwrap()) 
             }
         })
@@ -138,13 +137,13 @@ impl BankAccountComposition {
         ensures
             Self::inv(post)
     {
-        let id = choose |id| {
-            ||| Self::host_step(pre, post, msg_ops, id)
-            ||| Self::addition_service_step(pre, post, msg_ops, id)
-            ||| Self::subtraction_service_step(pre, post, msg_ops, id)
+        let (id, other_msgs) = choose |id, other_msgs| {
+            ||| Self::host_step(pre, post, msg_ops, id, other_msgs)
+            ||| Self::addition_service_step(pre, post, msg_ops, id, other_msgs)
+            ||| Self::subtraction_service_step(pre, post, msg_ops, id, other_msgs)
         };
-        Network::next_inv(pre.network(), post.network(), msg_ops, id);
-        if (Self::host_step(pre, post, msg_ops, id)) {
+        Network::next_inv(pre.network(), post.network(), msg_ops, id, other_msgs);
+        if (Self::host_step(pre, post, msg_ops, id, other_msgs)) {
             BankAccountHost::next_inv(pre.host(), post.host(), msg_ops);
             BankAccountHost::next_abs(pre.host(), post.host(), msg_ops);
             assert forall |m| #[trigger] AbstractService::is_service_reply(post.addition_service(), m, post.network().sent_msgs) implies 
@@ -153,31 +152,7 @@ impl BankAccountComposition {
             assert forall |m| #[trigger] AbstractService::is_service_reply(post.subtraction_service(), m, post.network().sent_msgs) implies 
                 AbstractService::is_service_reply(pre.subtraction_service(), m, pre.network().sent_msgs)
             by {}
-
-            // assert forall |m: Message<Seq<u8>>| {
-            //     &&& post.network().sent_msgs.contains(m)
-            //     &&& #[trigger] AdditionService::parse_request_spec(m.msg).is_some() 
-            //     &&& m.src == post.host().constants().id_self 
-            //     &&& m.dest == post.host().constants().id_addition_service
-            //     &&& post.host().locked.is_some()
-            //     &&& AdditionService::parse_request_spec(m.msg).unwrap().seq_no == post.host().locked.unwrap().msg.seq_no
-            // } implies {
-            //     let add_req = m.replace_msg(AdditionService::parse_request_spec(m.msg).unwrap());
-            //     if let BankAccountOperation::Deposit(v) = post.host().locked.unwrap().msg.op {
-            //         &&& add_req.msg.x == post.host().balance
-            //         &&& add_req.msg.y == v
-            //     } else {
-            //         false
-            //     }   
-            // } by {
-            //     // if (pre.network().sent_msgs.contains(m)) {
-            //     //     // assert(pre.host().locked.is_none());
-            //     //     // assert(AdditionService::parse_request_spec(m.msg).unwrap().seq_no < pre.host().next_seq_no);
-            //     // } else {
-                    
-            //     // }
-            // }
-        } else if (Self::addition_service_step(pre, post, msg_ops, id)) {
+        } else if (Self::addition_service_step(pre, post, msg_ops, id, other_msgs)) {
             AdditionService::next_inv(pre.addition_service(), post.addition_service(), msg_ops);
             AdditionService::next_abs(pre.addition_service(), post.addition_service(), msg_ops);
             assert forall |m| #[trigger] AbstractService::is_service_reply(post.addition_service(), m, post.network().sent_msgs) implies {
@@ -194,7 +169,7 @@ impl BankAccountComposition {
             by {}
         }
         else {
-            assert(Self::subtraction_service_step(pre, post, msg_ops, id));
+            assert(Self::subtraction_service_step(pre, post, msg_ops, id, other_msgs));
             SubtractionService::next_inv(pre.subtraction_service(), post.subtraction_service(), msg_ops);
             SubtractionService::next_abs(pre.subtraction_service(), post.subtraction_service(), msg_ops);
             assert forall |m| #[trigger] AbstractService::is_service_reply(post.addition_service(), m, post.network().sent_msgs) implies 

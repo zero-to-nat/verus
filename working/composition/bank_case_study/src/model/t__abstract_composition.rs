@@ -2,7 +2,7 @@ use vstd::prelude::*;
 use std::marker::PhantomData;
 use crate::model::t__types::*;
 use crate::model::t__abstract_service::*;
-use crate::model::abstract_host::*;
+use crate::model::t__abstract_host::*;
 use crate::model::t__network::*;
 
 verus! {
@@ -56,37 +56,36 @@ AbstractSingleServiceComposition<HSC, HS, HC, H, SC, S, State> {
         &&& Host::init(c.0, post.host())
         &&& Service::init(c.1, post.service())
         &&& Network::init(c.2, post.network())
-        // network corresponds exactly to host and service
-        &&& c.2.hosts == c.0.ids().union(c.1.ids())
         // host and service are disjoint entities
         &&& c.0.ids().disjoint(c.1.ids())
     }
 
-    pub open spec fn host_step(pre: State, post: State, msg_ops: MessageOps, id: HostId) -> bool
+    pub open spec fn host_step(pre: State, post: State, msg_ops: MessageOps, id: HostId, other_msgs: Set<Message<Seq<u8>>>) -> bool
     {
         &&& pre.host().constants().ids().contains(id)
         &&& H::next(pre.host(), post.host(), msg_ops)
         &&& pre.service() == post.service()
-        &&& Network::next(pre.network(), post.network(), msg_ops, id)
+        &&& (forall |m| #[trigger] other_msgs.contains(m) ==> !pre.host().constants().ids().contains(m.src) && !pre.service().constants().ids().contains(m.src))
+        &&& Network::next(pre.network(), post.network(), msg_ops, id, other_msgs)
     }
 
-    pub open spec fn service_step(pre: State, post: State, msg_ops: MessageOps, id: HostId) -> bool
+    pub open spec fn service_step(pre: State, post: State, msg_ops: MessageOps, id: HostId, other_msgs: Set<Message<Seq<u8>>>) -> bool
     {
         &&& pre.service().constants().ids().contains(id)
         &&& S::next(pre.service(), post.service(), msg_ops)
         &&& pre.host() == post.host()
-        &&& Network::next(pre.network(), post.network(), msg_ops, id)
+        &&& (forall |m| #[trigger] other_msgs.contains(m) ==> !pre.host().constants().ids().contains(m.src) && !pre.service().constants().ids().contains(m.src))
+        &&& Network::next(pre.network(), post.network(), msg_ops, id, other_msgs)
     }
 
     pub open spec fn next(pre: State, post: State, msg_ops: MessageOps) -> bool {
-        exists |id| {
-            ||| Self::host_step(pre, post, msg_ops, id)
-            ||| Self::service_step(pre, post, msg_ops, id)
+        exists |id, other_msgs| {
+            ||| Self::host_step(pre, post, msg_ops, id, other_msgs)
+            ||| Self::service_step(pre, post, msg_ops, id, other_msgs)
         }
     }
 
     pub open spec fn inv(s: State) -> bool {
-        &&& s.network().constants.hosts == s.host().constants().ids().union(s.service().constants().ids())
         &&& s.host().constants().ids().disjoint(s.service().constants().ids())
         &&& H::inv(s.host())
         &&& S::inv(s.service())
@@ -96,7 +95,7 @@ AbstractSingleServiceComposition<HSC, HS, HC, H, SC, S, State> {
         })
         &&& (forall |req| #[trigger] s.service().requests().contains(req) ==> {
             exists |m: Message<Seq<u8>>| {
-                &&& AbstractService::<SC, S>::is_service_request(s.service(), m, s.network().sent_msgs.union(s.network().external_msgs))
+                &&& AbstractService::<SC, S>::is_service_request(s.service(), m, s.network().sent_msgs)
                 &&& req == #[trigger] m.replace_msg(S::parse_request_spec(m.msg).unwrap()) 
             }
         })
@@ -119,12 +118,12 @@ AbstractSingleServiceComposition<HSC, HS, HC, H, SC, S, State> {
         ensures
             Self::inv(post)
     {
-        let id = choose |id| {
-            ||| Self::host_step(pre, post, msg_ops, id)
-            ||| Self::service_step(pre, post, msg_ops, id)
+        let (id, other_msgs) = choose |id, other_msgs| {
+            ||| Self::host_step(pre, post, msg_ops, id, other_msgs)
+            ||| Self::service_step(pre, post, msg_ops, id, other_msgs)
         };
-        Network::next_inv(pre.network(), post.network(), msg_ops, id);
-        if (Self::host_step(pre, post, msg_ops, id)) {
+        Network::next_inv(pre.network(), post.network(), msg_ops, id, other_msgs);
+        if (Self::host_step(pre, post, msg_ops, id, other_msgs)) {
             H::next_inv(pre.host(), post.host(), msg_ops);
             H::next_abs(pre.host(), post.host(), msg_ops);
             assert forall |m| AbstractService::<SC, S>::is_service_reply(post.service(), m, post.network().sent_msgs) implies 
@@ -132,14 +131,14 @@ AbstractSingleServiceComposition<HSC, HS, HC, H, SC, S, State> {
                 &&& #[trigger] post.service().replies().contains(m.replace_msg(S::parse_reply_spec(m.msg).unwrap()))
             } by {
                 assert(post.service().constants().ids().contains(m.src));
-                assert(post.network().sent_msgs == pre.network().sent_msgs.union(msg_ops.send));
+                assert(pre.network().sent_msgs.union(msg_ops.send).subset_of(post.network().sent_msgs));
                 assert(forall |m| #[trigger] msg_ops.send.contains(m) ==> post.host().constants().ids().contains(m.src));
                 assert(forall |m| #[trigger] msg_ops.send.contains(m) ==> !post.service().constants().ids().contains(m.src));
                 assert(pre.network().sent_msgs.contains(m));
                 assert(AbstractService::<SC, S>::is_service_reply(pre.service(), m, pre.network().sent_msgs));
             }
         } else {
-            assert(Self::service_step(pre, post, msg_ops, id));
+            assert(Self::service_step(pre, post, msg_ops, id, other_msgs));
             S::next_inv(pre.service(), post.service(), msg_ops);
             S::next_abs(pre.service(), post.service(), msg_ops);
             assert forall |m| AbstractService::<SC, S>::is_service_reply(post.service(), m, post.network().sent_msgs) implies 
@@ -158,17 +157,17 @@ AbstractSingleServiceComposition<HSC, HS, HC, H, SC, S, State> {
             assert forall |req| #[trigger] post.service().requests().contains(req) implies 
             {
                 exists |m: Message<Seq<u8>>| {
-                    &&& AbstractService::<SC, S>::is_service_request(post.service(), m, post.network().sent_msgs.union(post.network().external_msgs))
+                    &&& AbstractService::<SC, S>::is_service_request(post.service(), m, post.network().sent_msgs)
                     &&& req == #[trigger] m.replace_msg(S::parse_request_spec(m.msg).unwrap())
                 }
             } by {
                 if (pre.service().requests().contains(req)) {
                     let m = choose |m: Message<Seq<u8>>| {
-                        &&& AbstractService::<SC, S>::is_service_request(pre.service(), m, pre.network().sent_msgs.union(pre.network().external_msgs))
+                        &&& AbstractService::<SC, S>::is_service_request(pre.service(), m, pre.network().sent_msgs)
                         &&& req == #[trigger] m.replace_msg(S::parse_request_spec(m.msg).unwrap())
                     };
                 } else {
-                    let m = choose |m: Message<Seq<u8>>| AbstractService::<SC, S>::is_service_request(post.service(), m, post.network().sent_msgs.union(post.network().external_msgs)) && req == #[trigger] m.replace_msg(S::parse_request_spec(m.msg).unwrap());
+                    let m = choose |m: Message<Seq<u8>>| AbstractService::<SC, S>::is_service_request(post.service(), m, post.network().sent_msgs) && req == #[trigger] m.replace_msg(S::parse_request_spec(m.msg).unwrap());
                 }
             }
         }
