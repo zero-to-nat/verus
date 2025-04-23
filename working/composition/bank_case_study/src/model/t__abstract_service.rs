@@ -5,10 +5,10 @@ use crate::model::t__types::*;
 verus! {
 
 pub trait ServiceConstants : Sized {
-    spec fn ids(&self) -> Set<HostId>
+    spec fn endpoints(&self) -> Set<Endpoint>
         ;
 
-    spec fn reserved_ids(&self) -> Set<HostId>
+    spec fn reserved_endpoints(&self) -> Set<Endpoint>
         ;
 }
 
@@ -54,17 +54,17 @@ impl<C: ServiceConstants, S: ServiceState<C>> AbstractService<C, S> {
     pub open spec fn is_service_request(s: S, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool {
         &&& msgs.contains(m) 
         &&& S::parse_request_spec(m.msg).is_some()
-        &&& s.constants().ids().contains(m.dest)
-        &&& !s.constants().ids().contains(m.src)
-        &&& !s.constants().reserved_ids().contains(m.src)
+        &&& s.constants().endpoints().contains(m.dest)
+        &&& !s.constants().endpoints().contains(m.src)
+        &&& !s.constants().reserved_endpoints().contains(m.src)
     }
 
     pub open spec fn is_service_reply(s: S, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool {
         &&& msgs.contains(m) 
         &&& S::parse_reply_spec(m.msg).is_some()
-        &&& !s.constants().ids().contains(m.dest)
-        &&& !s.constants().reserved_ids().contains(m.dest)
-        &&& s.constants().ids().contains(m.src)
+        &&& !s.constants().endpoints().contains(m.dest)
+        &&& !s.constants().reserved_endpoints().contains(m.dest)
+        &&& s.constants().endpoints().contains(m.src)
     }
 
     pub open spec fn next(pre: S, post: S, msg_ops: MessageOps) -> bool

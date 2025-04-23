@@ -102,8 +102,8 @@ for InductiveMultiplication {
     
     open spec fn init(c: (MultiplicationHostConstants, AdditionServiceConstants, NetworkConstants), post: Self) -> bool {
         &&& AbstractSingleServiceComposition::init(c, post)
-        &&& post.service().constants().ids().contains(post.host().constants().id_addition_service)
-        &&& !post.service().constants().reserved_ids().contains(post.host().constants().id_self)
+        &&& post.service().constants().endpoints().contains(post.host().constants().id_addition_service)
+        &&& !post.service().constants().reserved_endpoints().contains(post.host().constants().id_self)
     }
 
     open spec fn next(pre: Self, post: Self, msg_ops: MessageOps) -> bool {
@@ -115,8 +115,8 @@ for InductiveMultiplication {
         &&& Self::inv_add_svc(s)
         &&& Self::inv_mult_inductive(s)
         &&& Self::inv_mult_svc(s)
-        &&& s.service().constants().ids().contains(s.host().constants().id_addition_service)
-        &&& !s.service().constants().reserved_ids().contains(s.host().constants().id_self)
+        &&& s.service().constants().endpoints().contains(s.host().constants().id_addition_service)
+        &&& !s.service().constants().reserved_endpoints().contains(s.host().constants().id_self)
     }
 
     proof fn init_inv(c: (MultiplicationHostConstants, AdditionServiceConstants, NetworkConstants), post: Self)
@@ -163,7 +163,7 @@ for InductiveMultiplication {
                         let mult_request = post.host().seq_no_assgn[add_reply.msg.seq_no];
 
                         assert(msg_ops.recv.contains(recv));
-                        assert(pre.service().constants().ids().contains(recv.src)); 
+                        assert(pre.service().constants().endpoints().contains(recv.src)); 
                         assert(pre.network().sent_msgs.contains(recv));
                         assert(AbstractService::<AdditionServiceConstants, AdditionService>::is_service_reply(pre.service, recv, pre.network().sent_msgs));
                         

@@ -69,7 +69,7 @@ for InductiveMultiplication
 
                 // inductive multiplication
                 assert(msg_ops.recv.contains(recv));
-                assert(pre.service.constants().ids().contains(recv.src)); 
+                assert(pre.service.constants().endpoints().contains(recv.src)); 
                 assert(pre.network.sent_msgs.contains(recv));
                 assert(AbstractService::<AdditionServiceConstants, AdditionService>::is_service_reply(pre.service, recv, pre.network.sent_msgs));
                 

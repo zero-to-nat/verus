@@ -13,13 +13,13 @@ verus! {
 
 impl BankAccountComposition {
     pub open spec fn inv_abs(s: Self) -> bool {
-        &&& s.host().constants().ids().disjoint(s.addition_service().constants().ids())
-        &&& s.host().constants().ids().disjoint(s.subtraction_service().constants().ids())
-        &&& s.addition_service().constants().ids().disjoint(s.subtraction_service().constants().ids())
-        &&& s.addition_service().constants().ids().contains(s.host().constants().id_addition_service)
-        &&& !s.addition_service().constants().reserved_ids().contains(s.host().constants().id_self)
-        &&& s.subtraction_service().constants().ids().contains(s.host().constants().id_subtraction_service)
-        &&& !s.subtraction_service().constants().reserved_ids().contains(s.host().constants().id_self)
+        &&& s.host().constants().endpoints().disjoint(s.addition_service().constants().endpoints())
+        &&& s.host().constants().endpoints().disjoint(s.subtraction_service().constants().endpoints())
+        &&& s.addition_service().constants().endpoints().disjoint(s.subtraction_service().constants().endpoints())
+        &&& s.addition_service().constants().endpoints().contains(s.host().constants().id_addition_service)
+        &&& !s.addition_service().constants().reserved_endpoints().contains(s.host().constants().id_self)
+        &&& s.subtraction_service().constants().endpoints().contains(s.host().constants().id_subtraction_service)
+        &&& !s.subtraction_service().constants().reserved_endpoints().contains(s.host().constants().id_self)
         &&& BankAccountHost::inv(s.host())
         &&& AdditionService::inv(s.addition_service())
         &&& SubtractionService::inv(s.subtraction_service())

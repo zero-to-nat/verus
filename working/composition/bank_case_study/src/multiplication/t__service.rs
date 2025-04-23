@@ -5,16 +5,16 @@ use crate::model::t__abstract_service::*;
 verus! {
 
 pub struct MultiplicationServiceConstants {
-    pub ids: Set<HostId>,
-    pub reserved_ids: Set<HostId>,
+    pub ids: Set<Endpoint>,
+    pub reserved_ids: Set<Endpoint>,
 }
 
 impl ServiceConstants for MultiplicationServiceConstants {
-    open spec fn ids(&self) -> Set<HostId> {
+    open spec fn endpoints(&self) -> Set<Endpoint> {
         self.ids
     }
 
-    open spec fn reserved_ids(&self) -> Set<HostId> {
+    open spec fn reserved_endpoints(&self) -> Set<Endpoint> {
         self.reserved_ids
     }
 }

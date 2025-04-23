@@ -8,12 +8,12 @@ use crate::multiplication::t__service::*;
 verus! {
 
 pub struct MultiplicationHostConstants {
-    pub id_self: HostId, 
-    pub id_addition_service: HostId
+    pub id_self: Endpoint, 
+    pub id_addition_service: Endpoint
 }
 
 impl HostConstants for MultiplicationHostConstants {
-    open spec fn ids(&self) -> Set<HostId> {
+    open spec fn endpoints(&self) -> Set<Endpoint> {
         set! { self.id_self }
     }
 }

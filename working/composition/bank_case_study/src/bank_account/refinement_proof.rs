@@ -72,7 +72,7 @@ impl RefinementObligation for BankAccountComposition
 
                 // apply addition invariants
                 assert(msg_ops.recv.contains(recv));
-                assert(pre.addition_service().constants().ids().contains(recv.src)); 
+                assert(pre.addition_service().constants().endpoints().contains(recv.src)); 
                 assert(pre.network.sent_msgs.contains(recv));
                 assert(AbstractService::is_service_reply(pre.addition_service(), recv, pre.network.sent_msgs));
 
@@ -106,7 +106,7 @@ impl RefinementObligation for BankAccountComposition
 
                 // apply subtraction invariants
                 assert(msg_ops.recv.contains(recv));
-                assert(pre.subtraction_service().constants().ids().contains(recv.src)); 
+                assert(pre.subtraction_service().constants().endpoints().contains(recv.src)); 
                 assert(pre.network.sent_msgs.contains(recv));
                 assert(AbstractService::is_service_reply(pre.subtraction_service(), recv, pre.network.sent_msgs));
 

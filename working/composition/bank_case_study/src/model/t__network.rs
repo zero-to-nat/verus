@@ -19,7 +19,7 @@ impl Network {
         &&& post.sent_msgs == Set::<Message<Seq<u8>>>::empty()
     }
 
-    pub open spec fn next(pre: Self, post: Self, host_msg_ops: MessageOps, host_id: HostId, other_sent_msgs: Set<Message<Seq<u8>>>) -> bool
+    pub open spec fn next(pre: Self, post: Self, host_msg_ops: MessageOps, host_id: Endpoint, other_sent_msgs: Set<Message<Seq<u8>>>) -> bool
     {
         &&& pre.constants == post.constants
         // Only allow receipt of a message if we've seen if has been sent.
@@ -41,7 +41,7 @@ impl Network {
         ensures Self::inv(post)
     {}
 
-    pub proof fn next_inv(pre: Self, post: Self, host_msg_ops: MessageOps, host_id: HostId, other_msgs: Set<Message<Seq<u8>>>)
+    pub proof fn next_inv(pre: Self, post: Self, host_msg_ops: MessageOps, host_id: Endpoint, other_msgs: Set<Message<Seq<u8>>>)
         requires
             Self::next(pre, post, host_msg_ops, host_id, other_msgs),
             Self::inv(pre)

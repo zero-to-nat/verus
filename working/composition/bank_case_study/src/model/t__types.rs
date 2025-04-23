@@ -2,12 +2,15 @@ use vstd::prelude::*;
 
 verus! {
 
-pub type HostId = u32;
+
+// abstract an endpoint to an integer for now
+pub type Endpoint = u32;
+
 pub type SeqNo = u32;
 
 pub struct Message<T> {
-    pub src: HostId, 
-    pub dest: HostId, 
+    pub src: Endpoint, 
+    pub dest: Endpoint, 
     pub msg: T
 }
 

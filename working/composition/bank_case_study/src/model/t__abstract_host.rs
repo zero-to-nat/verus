@@ -5,7 +5,7 @@ use crate::model::t__abstract_service::*;
 verus! {
 
 pub trait HostConstants : Sized {
-    spec fn ids(&self) -> Set<HostId>
+    spec fn endpoints(&self) -> Set<Endpoint>
         ;
 }
 

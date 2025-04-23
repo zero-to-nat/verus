@@ -5,16 +5,16 @@ use crate::model::t__abstract_service::*;
 verus! {
 
 pub struct SubtractionServiceConstants {
-    pub id: HostId,
-    pub reserved_ids: Set<HostId>
+    pub id: Endpoint,
+    pub reserved_ids: Set<Endpoint>
 }
 
 impl ServiceConstants for SubtractionServiceConstants {
-    open spec fn ids(&self) -> Set<HostId> {
+    open spec fn endpoints(&self) -> Set<Endpoint> {
         set!{ self.id }
     }
 
-    open spec fn reserved_ids(&self) -> Set<HostId> {
+    open spec fn reserved_endpoints(&self) -> Set<Endpoint> {
         self.reserved_ids
     }
 }

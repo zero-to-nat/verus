@@ -43,54 +43,54 @@ impl BankAccountComposition {
         &&& SubtractionService::init(c.2, post.subtraction_service())
         &&& Network::init(c.3, post.network())
         // host and services are all disjoint entities
-        &&& c.0.ids().disjoint(c.1.ids())
-        &&& c.0.ids().disjoint(c.2.ids())
-        &&& c.1.ids().disjoint(c.2.ids())
+        &&& c.0.endpoints().disjoint(c.1.endpoints())
+        &&& c.0.endpoints().disjoint(c.2.endpoints())
+        &&& c.1.endpoints().disjoint(c.2.endpoints())
         // ids match
-        &&& post.addition_service().constants().ids().contains(post.host().constants().id_addition_service)
-        &&& !post.addition_service().constants().reserved_ids().contains(post.host().constants().id_self)
-        &&& post.subtraction_service().constants().ids().contains(post.host().constants().id_subtraction_service)
-        &&& !post.subtraction_service().constants().reserved_ids().contains(post.host().constants().id_self)
+        &&& post.addition_service().constants().endpoints().contains(post.host().constants().id_addition_service)
+        &&& !post.addition_service().constants().reserved_endpoints().contains(post.host().constants().id_self)
+        &&& post.subtraction_service().constants().endpoints().contains(post.host().constants().id_subtraction_service)
+        &&& !post.subtraction_service().constants().reserved_endpoints().contains(post.host().constants().id_self)
     }
 
-    pub open spec fn host_step(pre: Self, post: Self, msg_ops: MessageOps, id: HostId, other_msgs: Set<Message<Seq<u8>>>) -> bool
+    pub open spec fn host_step(pre: Self, post: Self, msg_ops: MessageOps, id: Endpoint, other_msgs: Set<Message<Seq<u8>>>) -> bool
     {
-        &&& pre.host().constants().ids().contains(id)
+        &&& pre.host().constants().endpoints().contains(id)
         &&& BankAccountHost::next(pre.host(), post.host(), msg_ops)
         &&& pre.addition_service() == post.addition_service()
         &&& pre.subtraction_service() == post.subtraction_service()
         &&& (forall |m| #[trigger] other_msgs.contains(m) ==> {
-            &&& !pre.host().constants().ids().contains(m.src)
-            &&& !pre.addition_service().constants().ids().contains(m.src)
-            &&& !pre.subtraction_service().constants().ids().contains(m.src)
+            &&& !pre.host().constants().endpoints().contains(m.src)
+            &&& !pre.addition_service().constants().endpoints().contains(m.src)
+            &&& !pre.subtraction_service().constants().endpoints().contains(m.src)
         })
         &&& Network::next(pre.network(), post.network(), msg_ops, id, other_msgs)
     }
 
-    pub open spec fn addition_service_step(pre: Self, post: Self, msg_ops: MessageOps, id: HostId, other_msgs: Set<Message<Seq<u8>>>) -> bool
+    pub open spec fn addition_service_step(pre: Self, post: Self, msg_ops: MessageOps, id: Endpoint, other_msgs: Set<Message<Seq<u8>>>) -> bool
     {
-        &&& pre.addition_service().constants().ids().contains(id)
+        &&& pre.addition_service().constants().endpoints().contains(id)
         &&& AdditionService::next(pre.addition_service(), post.addition_service(), msg_ops)
         &&& pre.host() == post.host()
         &&& pre.subtraction_service() == post.subtraction_service()
         &&& (forall |m| #[trigger] other_msgs.contains(m) ==> {
-            &&& !pre.host().constants().ids().contains(m.src)
-            &&& !pre.addition_service().constants().ids().contains(m.src)
-            &&& !pre.subtraction_service().constants().ids().contains(m.src)
+            &&& !pre.host().constants().endpoints().contains(m.src)
+            &&& !pre.addition_service().constants().endpoints().contains(m.src)
+            &&& !pre.subtraction_service().constants().endpoints().contains(m.src)
         })
         &&& Network::next(pre.network(), post.network(), msg_ops, id, other_msgs)
     }
 
-    pub open spec fn subtraction_service_step(pre: Self, post: Self, msg_ops: MessageOps, id: HostId, other_msgs: Set<Message<Seq<u8>>>) -> bool
+    pub open spec fn subtraction_service_step(pre: Self, post: Self, msg_ops: MessageOps, id: Endpoint, other_msgs: Set<Message<Seq<u8>>>) -> bool
     {
-        &&& pre.subtraction_service().constants().ids().contains(id)
+        &&& pre.subtraction_service().constants().endpoints().contains(id)
         &&& SubtractionService::next(pre.subtraction_service(), post.subtraction_service(), msg_ops)
         &&& pre.host() == post.host()
         &&& pre.addition_service() == post.addition_service()
         &&& (forall |m| #[trigger] other_msgs.contains(m) ==> {
-            &&& !pre.host().constants().ids().contains(m.src)
-            &&& !pre.addition_service().constants().ids().contains(m.src)
-            &&& !pre.subtraction_service().constants().ids().contains(m.src)
+            &&& !pre.host().constants().endpoints().contains(m.src)
+            &&& !pre.addition_service().constants().endpoints().contains(m.src)
+            &&& !pre.subtraction_service().constants().endpoints().contains(m.src)
         })
         &&& Network::next(pre.network(), post.network(), msg_ops, id, other_msgs)
     }
