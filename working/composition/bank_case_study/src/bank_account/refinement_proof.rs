@@ -59,22 +59,22 @@ impl RefinementObligation for BankAccountComposition
             if (BankAccountHost::receive_request(pre.host, post.host, msg_ops)) {
                 let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| BankAccountHost::receive_request_impl(pre.host, post.host, msg_ops, recv, send);
                 assert(msg_ops.recv.contains(recv));
-                assert(AbstractService::is_service_request(Self::abs(pre.host()), recv, msg_ops.recv));
-                assert(!AbstractService::is_service_reply(Self::abs(pre.host()), send, msg_ops.send));
+                assert(BankAccountService::is_service_request(Self::abs(pre.host()), recv, msg_ops.recv));
+                assert(!BankAccountService::is_service_reply(Self::abs(pre.host()), send, msg_ops.send));
                 seq_to_set_push(pre.host().requests, Self::abs(pre.host()).requests(), recv.replace_msg(BankAccountService::parse_request_spec(recv.msg).unwrap()));
                 assert(BankAccountService::receive_request_impl(Self::abs(pre.host()), Self::abs(post.host()), msg_ops, recv));
             } else if (BankAccountHost::receive_addition_response(pre.host, post.host, msg_ops)) {
                 let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| BankAccountHost::receive_addition_response_impl(pre.host, post.host, msg_ops, recv, send);
                 assert(msg_ops.recv.contains(recv));
-                assert(!AbstractService::is_service_request(Self::abs(pre.host()), recv, msg_ops.recv));
+                assert(!BankAccountService::is_service_request(Self::abs(pre.host()), recv, msg_ops.recv));
                 assert(msg_ops.send.contains(send));
-                assert(AbstractService::is_service_reply(Self::abs(pre.host()), send, msg_ops.send));
+                assert(BankAccountService::is_service_reply(Self::abs(pre.host()), send, msg_ops.send));
 
                 // apply addition invariants
                 assert(msg_ops.recv.contains(recv));
                 assert(pre.addition_service().constants().endpoints().contains(recv.src)); 
                 assert(pre.network.sent_msgs.contains(recv));
-                assert(AbstractService::is_service_reply(pre.addition_service(), recv, pre.network.sent_msgs));
+                assert(AdditionService::is_service_reply(pre.addition_service(), recv, pre.network.sent_msgs));
 
                 let addition_reply = recv.replace_msg(AdditionService::parse_reply_spec(recv.msg).unwrap());
                 assert(pre.addition_service().replies().contains(addition_reply));
@@ -86,7 +86,7 @@ impl RefinementObligation for BankAccountComposition
                     &&& addition_reply.src == req.dest
                 };
                 let m = choose |m: Message<Seq<u8>>| {
-                    &&& AbstractService::is_service_request(pre.addition_service(), m, pre.network().sent_msgs)
+                    &&& AdditionService::is_service_request(pre.addition_service(), m, pre.network().sent_msgs)
                     &&& addition_request == #[trigger] m.replace_msg(AdditionService::parse_request_spec(m.msg).unwrap()) 
                 };
 
@@ -100,15 +100,15 @@ impl RefinementObligation for BankAccountComposition
                 assert(BankAccountHost::receive_subtraction_response(pre.host, post.host, msg_ops));
                 let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| BankAccountHost::receive_subtraction_response_impl(pre.host, post.host, msg_ops, recv, send);
                 assert(msg_ops.recv.contains(recv));
-                assert(!AbstractService::is_service_request(Self::abs(pre.host()), recv, msg_ops.recv));
+                assert(!BankAccountService::is_service_request(Self::abs(pre.host()), recv, msg_ops.recv));
                 assert(msg_ops.send.contains(send));
-                assert(AbstractService::is_service_reply(Self::abs(pre.host()), send, msg_ops.send));
+                assert(BankAccountService::is_service_reply(Self::abs(pre.host()), send, msg_ops.send));
 
                 // apply subtraction invariants
                 assert(msg_ops.recv.contains(recv));
                 assert(pre.subtraction_service().constants().endpoints().contains(recv.src)); 
                 assert(pre.network.sent_msgs.contains(recv));
-                assert(AbstractService::is_service_reply(pre.subtraction_service(), recv, pre.network.sent_msgs));
+                assert(SubtractionService::is_service_reply(pre.subtraction_service(), recv, pre.network.sent_msgs));
 
                 let subtraction_reply = recv.replace_msg(SubtractionService::parse_reply_spec(recv.msg).unwrap());
                 assert(pre.subtraction_service().replies().contains(subtraction_reply));
@@ -120,7 +120,7 @@ impl RefinementObligation for BankAccountComposition
                     &&& subtraction_reply.src == req.dest
                 };
                 let m = choose |m: Message<Seq<u8>>| {
-                    &&& AbstractService::is_service_request(pre.subtraction_service(), m, pre.network().sent_msgs)
+                    &&& SubtractionService::is_service_request(pre.subtraction_service(), m, pre.network().sent_msgs)
                     &&& subtraction_request == #[trigger] m.replace_msg(SubtractionService::parse_request_spec(m.msg).unwrap()) 
                 };
 

@@ -28,13 +28,13 @@ impl BankAccountComposition {
 
     pub open spec fn inv_add_svc(s: Self) -> bool
     {
-        &&& (forall |m| #[trigger] AbstractService::is_service_reply(s.addition_service(), m, s.network().sent_msgs) ==> {
+        &&& (forall |m| #[trigger] AdditionService::is_service_reply(s.addition_service(), m, s.network().sent_msgs) ==> {
             let repl = m.replace_msg(AdditionService::parse_reply_spec(m.msg).unwrap());
             &&& s.addition_service().replies().contains(repl)  
         })
         &&& (forall |req| #[trigger] s.addition_service().requests().contains(req) ==> {
             exists |m: Message<Seq<u8>>| {
-                &&& AbstractService::is_service_request(s.addition_service(), m, s.network().sent_msgs)
+                &&& AdditionService::is_service_request(s.addition_service(), m, s.network().sent_msgs)
                 &&& req == #[trigger] m.replace_msg(AdditionService::parse_request_spec(m.msg).unwrap()) 
             }
         })
@@ -42,13 +42,13 @@ impl BankAccountComposition {
 
     pub open spec fn inv_sub_svc(s: Self) -> bool
     {
-        &&& (forall |m| #[trigger] AbstractService::is_service_reply(s.subtraction_service(), m, s.network().sent_msgs) ==> {
+        &&& (forall |m| #[trigger] SubtractionService::is_service_reply(s.subtraction_service(), m, s.network().sent_msgs) ==> {
             let repl = m.replace_msg(SubtractionService::parse_reply_spec(m.msg).unwrap());
             &&& s.subtraction_service().replies().contains(repl)  
         })
         &&& (forall |req| #[trigger] s.subtraction_service().requests().contains(req) ==> {
             exists |m: Message<Seq<u8>>| {
-                &&& AbstractService::is_service_request(s.subtraction_service(), m, s.network().sent_msgs)
+                &&& SubtractionService::is_service_request(s.subtraction_service(), m, s.network().sent_msgs)
                 &&& req == #[trigger] m.replace_msg(SubtractionService::parse_request_spec(m.msg).unwrap()) 
             }
         })
@@ -146,40 +146,41 @@ impl BankAccountComposition {
         if (Self::host_step(pre, post, msg_ops, id, other_msgs)) {
             BankAccountHost::next_inv(pre.host(), post.host(), msg_ops);
             BankAccountHost::next_abs(pre.host(), post.host(), msg_ops);
-            assert forall |m| #[trigger] AbstractService::is_service_reply(post.addition_service(), m, post.network().sent_msgs) implies 
-                AbstractService::is_service_reply(pre.addition_service(), m, pre.network().sent_msgs)
+            assert forall |m| #[trigger] AdditionService::is_service_reply(post.addition_service(), m, post.network().sent_msgs) implies 
+                AdditionService::is_service_reply(pre.addition_service(), m, pre.network().sent_msgs)
             by {}
-            assert forall |m| #[trigger] AbstractService::is_service_reply(post.subtraction_service(), m, post.network().sent_msgs) implies 
-                AbstractService::is_service_reply(pre.subtraction_service(), m, pre.network().sent_msgs)
+            assert forall |m| #[trigger] SubtractionService::is_service_reply(post.subtraction_service(), m, post.network().sent_msgs) implies 
+                SubtractionService::is_service_reply(pre.subtraction_service(), m, pre.network().sent_msgs)
             by {}
         } else if (Self::addition_service_step(pre, post, msg_ops, id, other_msgs)) {
             AdditionService::next_inv(pre.addition_service(), post.addition_service(), msg_ops);
             AdditionService::next_abs(pre.addition_service(), post.addition_service(), msg_ops);
-            assert forall |m| #[trigger] AbstractService::is_service_reply(post.addition_service(), m, post.network().sent_msgs) implies {
+            assert forall |m| #[trigger] AdditionService::is_service_reply(post.addition_service(), m, post.network().sent_msgs) implies {
                 let repl = m.replace_msg(AdditionService::parse_reply_spec(m.msg).unwrap());
                 &&& post.addition_service().replies().contains(repl)  
             } by {
-                if (AbstractService::is_service_reply(pre.addition_service(), m, pre.network().sent_msgs)) {
+                if (AdditionService::is_service_reply(pre.addition_service(), m, pre.network().sent_msgs)) {
                 } else {
                     assert(msg_ops.send.contains(m));
                 }
             }
-            assert forall |m| #[trigger] AbstractService::is_service_reply(post.subtraction_service(), m, post.network().sent_msgs) implies 
-                AbstractService::is_service_reply(pre.subtraction_service(), m, pre.network().sent_msgs)
+
+            assert forall |m| #[trigger] SubtractionService::is_service_reply(post.subtraction_service(), m, post.network().sent_msgs) implies 
+                SubtractionService::is_service_reply(pre.subtraction_service(), m, pre.network().sent_msgs)
             by {}
         }
         else {
             assert(Self::subtraction_service_step(pre, post, msg_ops, id, other_msgs));
             SubtractionService::next_inv(pre.subtraction_service(), post.subtraction_service(), msg_ops);
             SubtractionService::next_abs(pre.subtraction_service(), post.subtraction_service(), msg_ops);
-            assert forall |m| #[trigger] AbstractService::is_service_reply(post.addition_service(), m, post.network().sent_msgs) implies 
-                AbstractService::is_service_reply(pre.addition_service(), m, pre.network().sent_msgs)
+            assert forall |m| #[trigger] AdditionService::is_service_reply(post.addition_service(), m, post.network().sent_msgs) implies 
+                AdditionService::is_service_reply(pre.addition_service(), m, pre.network().sent_msgs)
             by {}
-            assert forall |m| #[trigger] AbstractService::is_service_reply(post.subtraction_service(), m, post.network().sent_msgs) implies {
+            assert forall |m| #[trigger] SubtractionService::is_service_reply(post.subtraction_service(), m, post.network().sent_msgs) implies {
                 let repl = m.replace_msg(SubtractionService::parse_reply_spec(m.msg).unwrap());
                 &&& post.subtraction_service().replies().contains(repl)  
             } by {
-                if (AbstractService::is_service_reply(pre.subtraction_service(), m, pre.network().sent_msgs)) {
+                if (SubtractionService::is_service_reply(pre.subtraction_service(), m, pre.network().sent_msgs)) {
                 } else {
                     assert(msg_ops.send.contains(m));
                 }

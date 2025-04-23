@@ -90,12 +90,12 @@ AbstractSingleServiceComposition<HSC, HS, HC, H, SC, S, State> {
         &&& H::inv(s.host())
         &&& S::inv(s.service())
         &&& Network::inv(s.network())
-        &&& (forall |m| #[trigger] AbstractService::<SC, S>::is_service_reply(s.service(), m, s.network().sent_msgs) ==> {
+        &&& (forall |m| #[trigger] S::is_service_reply(s.service(), m, s.network().sent_msgs) ==> {
             &&& s.service().replies().contains(m.replace_msg(S::parse_reply_spec(m.msg).unwrap()))
         })
         &&& (forall |req| #[trigger] s.service().requests().contains(req) ==> {
             exists |m: Message<Seq<u8>>| {
-                &&& AbstractService::<SC, S>::is_service_request(s.service(), m, s.network().sent_msgs)
+                &&& S::is_service_request(s.service(), m, s.network().sent_msgs)
                 &&& req == #[trigger] m.replace_msg(S::parse_request_spec(m.msg).unwrap()) 
             }
         })
@@ -126,30 +126,32 @@ AbstractSingleServiceComposition<HSC, HS, HC, H, SC, S, State> {
         if (Self::host_step(pre, post, msg_ops, id, other_msgs)) {
             H::next_inv(pre.host(), post.host(), msg_ops);
             H::next_abs(pre.host(), post.host(), msg_ops);
-            assert forall |m| AbstractService::<SC, S>::is_service_reply(post.service(), m, post.network().sent_msgs) implies 
+            assert forall |m| S::is_service_reply(post.service(), m, post.network().sent_msgs) implies 
             {
                 &&& #[trigger] post.service().replies().contains(m.replace_msg(S::parse_reply_spec(m.msg).unwrap()))
             } by {
+                S::service_reply_abs(post.service(), m, post.network().sent_msgs);
                 assert(post.service().constants().endpoints().contains(m.src));
                 assert(pre.network().sent_msgs.union(msg_ops.send).subset_of(post.network().sent_msgs));
                 assert(forall |m| #[trigger] msg_ops.send.contains(m) ==> post.host().constants().endpoints().contains(m.src));
                 assert(forall |m| #[trigger] msg_ops.send.contains(m) ==> !post.service().constants().endpoints().contains(m.src));
                 assert(pre.network().sent_msgs.contains(m));
-                assert(AbstractService::<SC, S>::is_service_reply(pre.service(), m, pre.network().sent_msgs));
+                S::service_reply_abs(pre.service(), m, pre.network().sent_msgs);
+                assert(S::is_service_reply(pre.service(), m, pre.network().sent_msgs));
             }
         } else {
             assert(Self::service_step(pre, post, msg_ops, id, other_msgs));
             S::next_inv(pre.service(), post.service(), msg_ops);
             S::next_abs(pre.service(), post.service(), msg_ops);
-            assert forall |m| AbstractService::<SC, S>::is_service_reply(post.service(), m, post.network().sent_msgs) implies 
+            assert forall |m| S::is_service_reply(post.service(), m, post.network().sent_msgs) implies 
             {
                 &&& #[trigger] post.service().replies().contains(m.replace_msg(S::parse_reply_spec(m.msg).unwrap()))
             } by {
-                if (AbstractService::<SC, S>::is_service_reply(pre.service(), m, pre.network().sent_msgs)) {
+                if (S::is_service_reply(pre.service(), m, pre.network().sent_msgs)) {
                     assert(pre.service().replies().contains(m.replace_msg(S::parse_reply_spec(m.msg).unwrap())));
                 } else {
                     assert(msg_ops.send.contains(m));
-                    assert(AbstractService::<SC, S>::is_service_reply(pre.service(), m, msg_ops.send));
+                    assert(S::is_service_reply(pre.service(), m, msg_ops.send));
                     assert(post.service().replies().contains(m.replace_msg(S::parse_reply_spec(m.msg).unwrap())));
                 }
             }
@@ -157,17 +159,17 @@ AbstractSingleServiceComposition<HSC, HS, HC, H, SC, S, State> {
             assert forall |req| #[trigger] post.service().requests().contains(req) implies 
             {
                 exists |m: Message<Seq<u8>>| {
-                    &&& AbstractService::<SC, S>::is_service_request(post.service(), m, post.network().sent_msgs)
+                    &&& S::is_service_request(post.service(), m, post.network().sent_msgs)
                     &&& req == #[trigger] m.replace_msg(S::parse_request_spec(m.msg).unwrap())
                 }
             } by {
                 if (pre.service().requests().contains(req)) {
                     let m = choose |m: Message<Seq<u8>>| {
-                        &&& AbstractService::<SC, S>::is_service_request(pre.service(), m, pre.network().sent_msgs)
+                        &&& S::is_service_request(pre.service(), m, pre.network().sent_msgs)
                         &&& req == #[trigger] m.replace_msg(S::parse_request_spec(m.msg).unwrap())
                     };
                 } else {
-                    let m = choose |m: Message<Seq<u8>>| AbstractService::<SC, S>::is_service_request(post.service(), m, post.network().sent_msgs) && req == #[trigger] m.replace_msg(S::parse_request_spec(m.msg).unwrap());
+                    let m = choose |m: Message<Seq<u8>>| S::is_service_request(post.service(), m, post.network().sent_msgs) && req == #[trigger] m.replace_msg(S::parse_request_spec(m.msg).unwrap());
                 }
             }
         }

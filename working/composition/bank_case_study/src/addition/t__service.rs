@@ -9,13 +9,15 @@ pub struct AdditionServiceConstants {
     pub reserved_ids: Set<Endpoint>
 }
 
+impl AdditionServiceConstants {
+    pub open spec fn reserved_endpoints(&self) -> Set<Endpoint> {
+        self.reserved_ids
+    }
+}
+
 impl ServiceConstants for AdditionServiceConstants {
     open spec fn endpoints(&self) -> Set<Endpoint> {
         set!{ self.id }
-    }
-
-    open spec fn reserved_endpoints(&self) -> Set<Endpoint> {
-        self.reserved_ids
     }
 }
 
@@ -64,6 +66,26 @@ impl ServiceState<AdditionServiceConstants> for AdditionService {
     proof fn parse_one_to_one(m1: Seq<u8>, m2: Seq<u8>) {}
 }
 
+impl ServiceInterface<AdditionServiceConstants> for AdditionService {
+    open spec fn is_service_request(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
+    {
+        &&& AbstractServiceInterface::is_service_request(s, m, msgs)
+        &&& !s.constants().reserved_endpoints().contains(m.src)
+    }
+
+    open spec fn is_service_reply(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
+    {
+        &&& AbstractServiceInterface::is_service_reply(s, m, msgs)
+        &&& !s.constants().reserved_endpoints().contains(m.dest)
+    }
+
+    proof fn service_request_abs(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>)
+    {}
+
+    proof fn service_reply_abs(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>)
+    {}
+}
+
 impl AdditionService {
     pub open spec fn add_impl(pre: Self, post: Self, msg_ops: MessageOps, recv: Message<Seq<u8>>, send: Message<Seq<u8>>) -> bool {
         let p_request = Self::parse_request_spec(recv.msg);
@@ -71,8 +93,8 @@ impl AdditionService {
         &&& pre.constants() == post.constants()
         &&& msg_ops.recv == set!{ recv }
         &&& msg_ops.send == set!{ send }
-        &&& AbstractService::is_service_request(pre, recv, msg_ops.recv)
-        &&& AbstractService::is_service_reply(pre, send, msg_ops.send)
+        &&& Self::is_service_request(pre, recv, msg_ops.recv)
+        &&& Self::is_service_reply(pre, send, msg_ops.send)
         &&& p_request.unwrap().x + p_request.unwrap().y <= u32::MAX
         &&& p_reply.unwrap() == AdditionReply { 
             seq_no: p_request.unwrap().seq_no, 
