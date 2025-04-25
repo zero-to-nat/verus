@@ -1,6 +1,8 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
-use crate::model::t__abstract_service::*;
+use crate::model::t__state_machine::*;
+use crate::model::t__networked_state_machine::*;
+use crate::model::t__service::*;
 
 verus! {
 
@@ -15,10 +17,13 @@ impl BankAccountServiceConstants {
     }
 }
 
-impl ServiceConstants for BankAccountServiceConstants {
+impl NetworkedStateMachineConstants for BankAccountServiceConstants {
     open spec fn endpoints(&self) -> Set<Endpoint> {
         set!{ self.id }
     }
+}
+
+impl ServiceConstants for BankAccountServiceConstants {
 }
 
 pub enum BankAccountOperation {
@@ -44,13 +49,15 @@ pub struct BankAccountService {
     pub balance: u32
 }
 
-impl ServiceState<BankAccountServiceConstants> for BankAccountService {
-    type ServiceRequest = BankAccountRequest;
-    type ServiceReply = BankAccountReply;
-
+impl NetworkedStateMachine<BankAccountServiceConstants> for BankAccountService {
     open spec fn constants(&self) -> BankAccountServiceConstants {
         self.constants
     }
+}
+
+impl ServiceDefinition<BankAccountServiceConstants> for BankAccountService {
+    type ServiceRequest = BankAccountRequest;
+    type ServiceReply = BankAccountReply;
 
     open spec fn requests(&self) -> Set<Message<Self::ServiceRequest>> {
         self.requests
@@ -58,6 +65,24 @@ impl ServiceState<BankAccountServiceConstants> for BankAccountService {
     
     open spec fn replies(&self) -> Set<Message<Self::ServiceReply>> {
         self.replies
+    }
+
+    open spec fn is_service_request(c: BankAccountServiceConstants, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
+    {
+        &&& msgs.contains(m) 
+        &&& Self::parse_request_spec(m.msg).is_some()
+        &&& c.endpoints().contains(m.dest)
+        &&& !c.endpoints().contains(m.src)
+        &&& !c.reserved_endpoints().contains(m.src)
+    }
+
+    open spec fn is_service_reply(c: BankAccountServiceConstants, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
+    {
+        &&& msgs.contains(m) 
+        &&& Self::parse_reply_spec(m.msg).is_some()
+        &&& !c.endpoints().contains(m.dest)
+        &&& c.endpoints().contains(m.src)
+        &&& !c.reserved_endpoints().contains(m.dest)
     }
 
     #[verifier::external_body]
@@ -72,33 +97,13 @@ impl ServiceState<BankAccountServiceConstants> for BankAccountService {
     proof fn parse_one_to_one(m1: Seq<u8>, m2: Seq<u8>) {}
 }
 
-impl ServiceInterface<BankAccountServiceConstants> for BankAccountService {
-    open spec fn is_service_request(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
-    {
-        &&& AbstractServiceInterface::is_service_request(s, m, msgs)
-        &&& !s.constants().reserved_endpoints().contains(m.src)
-    }
-
-    open spec fn is_service_reply(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
-    {
-        &&& AbstractServiceInterface::is_service_reply(s, m, msgs)
-        &&& !s.constants().reserved_endpoints().contains(m.dest)
-    }
-
-    proof fn service_request_abs(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>)
-    {}
-
-    proof fn service_reply_abs(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>)
-    {}
-}
-
 impl BankAccountService {
     pub open spec fn receive_request_impl(pre: Self, post: Self, msg_ops: MessageOps, recv: Message<Seq<u8>>) -> bool {
         let parsed_recv = Self::parse_request_spec(recv.msg);
         &&& pre.constants == post.constants
         &&& msg_ops.recv == set!{ recv } 
-        &&& Self::is_service_request(pre, recv, msg_ops.recv)
-        &&& (forall |m| #[trigger] msg_ops.send.contains(m) ==> !Self::is_service_reply(pre, m, msg_ops.send))
+        &&& Self::is_service_request(pre.constants(), recv, msg_ops.recv)
+        &&& (forall |m| #[trigger] msg_ops.send.contains(m) ==> !Self::is_service_reply(pre.constants(), m, msg_ops.send))
         &&& post.requests == pre.requests().insert(recv.replace_msg(parsed_recv.unwrap()))
         &&& post.replies == pre.replies
     }
@@ -111,8 +116,8 @@ impl BankAccountService {
         let p_reply = Self::parse_reply_spec(send.msg);
         &&& pre.constants() == post.constants()
         &&& msg_ops.send == set!{ send }
-        &&& Self::is_service_reply(pre, send, msg_ops.send)
-        &&& (forall |m| #[trigger] msg_ops.recv.contains(m) ==> !Self::is_service_request(pre, m, msg_ops.recv))
+        &&& Self::is_service_reply(pre.constants(), send, msg_ops.send)
+        &&& (forall |m| #[trigger] msg_ops.recv.contains(m) ==> !Self::is_service_request(pre.constants(), m, msg_ops.recv))
         &&& pre.requests().contains(request)
         &&& match request.msg.op {
             BankAccountOperation::Deposit(v) => {
@@ -138,7 +143,7 @@ impl BankAccountService {
     }
 }
 
-impl Service<BankAccountServiceConstants> for BankAccountService {
+impl StateMachineDefinition<BankAccountServiceConstants, MessageOps> for BankAccountService {
     open spec fn init(c: BankAccountServiceConstants, post: Self) -> bool
     { 
         &&& AbstractService::<BankAccountServiceConstants, Self>::init(c, post)
@@ -150,21 +155,10 @@ impl Service<BankAccountServiceConstants> for BankAccountService {
         ||| Self::send_response(pre, post, msg_ops)
     }
 
-    open spec fn inv(s: Self) -> bool {
-        true
+    open spec fn stutter(pre: Self, msg_ops: MessageOps) -> bool 
+    {
+        &&& AbstractService::<BankAccountServiceConstants, Self>::stutter(pre, msg_ops)
     }
-
-    proof fn init_inv(c: BankAccountServiceConstants, post: Self)
-    { }
-
-    proof fn next_inv(pre: Self, post: Self, msg_ops: MessageOps)
-    {}
-
-    proof fn init_abs(c: BankAccountServiceConstants, post: Self)
-    {}
-    
-    proof fn next_abs(pre: Self, post: Self, msg_ops: MessageOps)
-    {}
 }
 }
 

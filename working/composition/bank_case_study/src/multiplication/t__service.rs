@@ -13,8 +13,10 @@ impl ServiceConstants for MultiplicationServiceConstants {
     open spec fn endpoints(&self) -> Set<Endpoint> {
         self.ids
     }
+}
 
-    open spec fn reserved_endpoints(&self) -> Set<Endpoint> {
+impl MultiplicationServiceConstants {
+    pub open spec fn reserved_endpoints(&self) -> Set<Endpoint> {
         self.reserved_ids
     }
 }
@@ -64,13 +66,33 @@ impl ServiceState<MultiplicationServiceConstants> for MultiplicationService {
     proof fn parse_one_to_one(m1: Seq<u8>, m2: Seq<u8>) {}
 }
 
+impl ServiceInterface<MultiplicationServiceConstants> for MultiplicationService {
+    open spec fn is_service_request(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
+    {
+        &&& AbstractServiceInterface::is_service_request(s, m, msgs)
+        &&& !s.constants().reserved_endpoints().contains(m.src)
+    }
+
+    open spec fn is_service_reply(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
+    {
+        &&& AbstractServiceInterface::is_service_reply(s, m, msgs)
+        &&& !s.constants().reserved_endpoints().contains(m.dest)
+    }
+
+    proof fn service_request_abs(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>)
+    {}
+
+    proof fn service_reply_abs(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>)
+    {}
+}
+
 impl MultiplicationService {
     pub open spec fn receive_request_impl(pre: Self, post: Self, msg_ops: MessageOps, recv: Message<Seq<u8>>) -> bool {
         let parsed_recv = Self::parse_request_spec(recv.msg);
         &&& pre.constants == post.constants
         &&& msg_ops.recv == set!{ recv } 
-        &&& AbstractService::is_service_request(pre, recv, msg_ops.recv)
-        &&& (forall |m| #[trigger] msg_ops.send.contains(m) ==> !AbstractService::is_service_reply(pre, m, msg_ops.send))
+        &&& Self::is_service_request(pre, recv, msg_ops.recv)
+        &&& (forall |m| #[trigger] msg_ops.send.contains(m) ==> !Self::is_service_reply(pre, m, msg_ops.send))
         &&& post.requests == pre.requests().insert(recv.replace_msg(parsed_recv.unwrap()))
         &&& post.replies == pre.replies
     }
@@ -83,8 +105,8 @@ impl MultiplicationService {
         let p_reply = Self::parse_reply_spec(send.msg);
         &&& pre.constants() == post.constants()
         &&& msg_ops.send == set!{ send }
-        &&& AbstractService::is_service_reply(pre, send, msg_ops.send)
-        &&& (forall |m| #[trigger] msg_ops.recv.contains(m) ==> !AbstractService::is_service_request(pre, m, msg_ops.recv))
+        &&& Self::is_service_reply(pre, send, msg_ops.send)
+        &&& (forall |m| #[trigger] msg_ops.recv.contains(m) ==> !Self::is_service_request(pre, m, msg_ops.recv))
         &&& pre.requests().contains(request)
         &&& request.msg.x * request.msg.y <= u32::MAX
         &&& p_reply.unwrap() == MultiplicationReply { 

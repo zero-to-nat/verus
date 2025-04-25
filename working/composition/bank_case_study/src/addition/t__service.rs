@@ -1,6 +1,8 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
-use crate::model::t__abstract_service::*;
+use crate::model::t__state_machine::*;
+use crate::model::t__networked_state_machine::*;
+use crate::model::t__service::*;
 
 verus! {
 
@@ -15,10 +17,13 @@ impl AdditionServiceConstants {
     }
 }
 
-impl ServiceConstants for AdditionServiceConstants {
+impl NetworkedStateMachineConstants for AdditionServiceConstants {
     open spec fn endpoints(&self) -> Set<Endpoint> {
         set!{ self.id }
     }
+}
+
+impl ServiceConstants for AdditionServiceConstants {
 }
 
 pub struct AdditionRequest {
@@ -38,13 +43,15 @@ pub struct AdditionService {
     pub replies: Set<Message<AdditionReply>>
 }
 
-impl ServiceState<AdditionServiceConstants> for AdditionService {
-    type ServiceRequest = AdditionRequest;
-    type ServiceReply = AdditionReply;
-
+impl NetworkedStateMachine<AdditionServiceConstants> for AdditionService {
     open spec fn constants(&self) -> AdditionServiceConstants {
         self.constants
     }
+}
+
+impl ServiceDefinition<AdditionServiceConstants> for AdditionService {
+    type ServiceRequest = AdditionRequest;
+    type ServiceReply = AdditionReply;
 
     open spec fn requests(&self) -> Set<Message<Self::ServiceRequest>> {
         self.requests
@@ -52,6 +59,25 @@ impl ServiceState<AdditionServiceConstants> for AdditionService {
     
     open spec fn replies(&self) -> Set<Message<Self::ServiceReply>> {
         self.replies
+    }
+
+    open spec fn is_service_request(c: AdditionServiceConstants, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
+    {
+        // todo - resolve circular reference so that we can use AbstractService definition here
+        &&& msgs.contains(m) 
+        &&& Self::parse_request_spec(m.msg).is_some()
+        &&& c.endpoints().contains(m.dest)
+        &&& !c.endpoints().contains(m.src)
+        &&& !c.reserved_endpoints().contains(m.src)
+    }
+
+    open spec fn is_service_reply(c: AdditionServiceConstants, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
+    {
+        &&& msgs.contains(m) 
+        &&& Self::parse_reply_spec(m.msg).is_some()
+        &&& !c.endpoints().contains(m.dest)
+        &&& c.endpoints().contains(m.src)
+        &&& !c.reserved_endpoints().contains(m.dest)
     }
 
     #[verifier::external_body]
@@ -66,26 +92,6 @@ impl ServiceState<AdditionServiceConstants> for AdditionService {
     proof fn parse_one_to_one(m1: Seq<u8>, m2: Seq<u8>) {}
 }
 
-impl ServiceInterface<AdditionServiceConstants> for AdditionService {
-    open spec fn is_service_request(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
-    {
-        &&& AbstractServiceInterface::is_service_request(s, m, msgs)
-        &&& !s.constants().reserved_endpoints().contains(m.src)
-    }
-
-    open spec fn is_service_reply(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
-    {
-        &&& AbstractServiceInterface::is_service_reply(s, m, msgs)
-        &&& !s.constants().reserved_endpoints().contains(m.dest)
-    }
-
-    proof fn service_request_abs(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>)
-    {}
-
-    proof fn service_reply_abs(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>)
-    {}
-}
-
 impl AdditionService {
     pub open spec fn add_impl(pre: Self, post: Self, msg_ops: MessageOps, recv: Message<Seq<u8>>, send: Message<Seq<u8>>) -> bool {
         let p_request = Self::parse_request_spec(recv.msg);
@@ -93,8 +99,8 @@ impl AdditionService {
         &&& pre.constants() == post.constants()
         &&& msg_ops.recv == set!{ recv }
         &&& msg_ops.send == set!{ send }
-        &&& Self::is_service_request(pre, recv, msg_ops.recv)
-        &&& Self::is_service_reply(pre, send, msg_ops.send)
+        &&& Self::is_service_request(pre.constants(), recv, msg_ops.recv)
+        &&& Self::is_service_reply(pre.constants(), send, msg_ops.send)
         &&& p_request.unwrap().x + p_request.unwrap().y <= u32::MAX
         &&& p_reply.unwrap() == AdditionReply { 
             seq_no: p_request.unwrap().seq_no, 
@@ -111,7 +117,7 @@ impl AdditionService {
     }
 }
 
-impl Service<AdditionServiceConstants> for AdditionService {
+impl StateMachineDefinition<AdditionServiceConstants, MessageOps> for AdditionService {
     open spec fn init(c: AdditionServiceConstants, post: Self) -> bool
     { 
         &&& AbstractService::<AdditionServiceConstants, Self>::init(c, post)
@@ -121,61 +127,10 @@ impl Service<AdditionServiceConstants> for AdditionService {
         &&& Self::add(pre, post, msg_ops)
     }
 
-    open spec fn inv(s: Self) -> bool {
-        forall |repl| #[trigger] s.replies().contains(repl) ==> 
-            exists |req| {
-                &&& #[trigger] s.requests().contains(req) 
-                &&& req.msg.x + req.msg.y <= u32::MAX
-                &&& repl.msg == AdditionReply { seq_no: req.msg.seq_no, sum: (req.msg.x + req.msg.y) as u32 }
-                &&& repl.dest == req.src
-                &&& repl.src == req.dest
-            }
-    }
-
-    proof fn init_inv(c: AdditionServiceConstants, post: Self)
-    { }
-
-    proof fn next_inv(pre: Self, post: Self, msg_ops: MessageOps)
+    open spec fn stutter(pre: Self, msg_ops: MessageOps) -> bool 
     {
-        assert(Self::add(pre, post, msg_ops));
-        let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| Self::add_impl(pre, post, msg_ops, recv, send);
-        assert(Self::add_impl(pre, post, msg_ops, recv, send));
-        let parsed_recv = Self::parse_request_spec(recv.msg).unwrap();
-        let parsed_send = Self::parse_reply_spec(send.msg).unwrap();
-        assert forall |repl| #[trigger] post.replies().contains(repl) implies 
-            exists |req| {
-                &&& #[trigger] post.requests().contains(req) 
-                &&& req.msg.x + req.msg.y <= u32::MAX
-                &&& repl.msg == AdditionReply { seq_no: req.msg.seq_no, sum: (req.msg.x + req.msg.y) as u32 }
-                &&& repl.dest == req.src
-                &&& repl.src == req.dest
-            }
-        by 
-        {
-            if (repl == send.replace_msg(parsed_send)) {
-                assert(post.replies().contains(send.replace_msg(parsed_send)));
-                assert(post.requests().contains(recv.replace_msg(parsed_recv)));
-            } else {
-                assert(pre.replies().contains(repl));
-                assert(Self::inv(pre));
-                let req = choose |req| {
-                    &&& #[trigger] pre.requests().contains(req) 
-                    &&& req.msg.x + req.msg.y <= u32::MAX
-                    &&& repl.msg == AdditionReply { seq_no: req.msg.seq_no, sum: (req.msg.x + req.msg.y) as u32 }
-                    &&& repl.dest == req.src
-                    &&& repl.src == req.dest
-                };
-                assert(pre.requests().contains(req));
-                assert(post.requests().contains(req));
-            }
-        }
+        &&& AbstractService::<AdditionServiceConstants, Self>::stutter(pre, msg_ops)
     }
-
-    proof fn init_abs(c: AdditionServiceConstants, post: Self)
-    {}
-    
-    proof fn next_abs(pre: Self, post: Self, msg_ops: MessageOps)
-    {}
 }
 }
 

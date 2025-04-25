@@ -34,10 +34,6 @@ impl BankAccountComposition {
     }
 
     pub open spec fn init(c: (BankAccountHostConstants, AdditionServiceConstants, SubtractionServiceConstants, NetworkConstants), post: Self) -> bool {
-        &&& post.host().constants() == c.0
-        &&& post.addition_service().constants() == c.1
-        &&& post.subtraction_service().constants() == c.2
-        &&& post.network().constants == c.3
         &&& BankAccountHost::init(c.0, post.host())
         &&& AdditionService::init(c.1, post.addition_service())
         &&& SubtractionService::init(c.2, post.subtraction_service())

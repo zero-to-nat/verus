@@ -1,6 +1,8 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
-use crate::model::t__abstract_service::*;
+use crate::model::t__state_machine::*;
+use crate::model::t__networked_state_machine::*;
+use crate::model::t__service::*;
 
 verus! {
 
@@ -15,10 +17,13 @@ impl SubtractionServiceConstants {
     }
 }
 
-impl ServiceConstants for SubtractionServiceConstants {
+impl NetworkedStateMachineConstants for SubtractionServiceConstants {
     open spec fn endpoints(&self) -> Set<Endpoint> {
         set!{ self.id }
     }
+}
+
+impl ServiceConstants for SubtractionServiceConstants {
 }
 
 pub struct SubtractionRequest {
@@ -38,13 +43,15 @@ pub struct SubtractionService {
     pub replies: Set<Message<SubtractionReply>>
 }
 
-impl ServiceState<SubtractionServiceConstants> for SubtractionService {
-    type ServiceRequest = SubtractionRequest;
-    type ServiceReply = SubtractionReply;
-
+impl NetworkedStateMachine<SubtractionServiceConstants> for SubtractionService {
     open spec fn constants(&self) -> SubtractionServiceConstants {
         self.constants
     }
+}
+
+impl ServiceDefinition<SubtractionServiceConstants> for SubtractionService {
+    type ServiceRequest = SubtractionRequest;
+    type ServiceReply = SubtractionReply;
 
     open spec fn requests(&self) -> Set<Message<Self::ServiceRequest>> {
         self.requests
@@ -52,6 +59,24 @@ impl ServiceState<SubtractionServiceConstants> for SubtractionService {
     
     open spec fn replies(&self) -> Set<Message<Self::ServiceReply>> {
         self.replies
+    }
+
+    open spec fn is_service_request(c: SubtractionServiceConstants, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
+    {
+        &&& msgs.contains(m) 
+        &&& Self::parse_request_spec(m.msg).is_some()
+        &&& c.endpoints().contains(m.dest)
+        &&& !c.endpoints().contains(m.src)
+        &&& !c.reserved_endpoints().contains(m.src)
+    }
+
+    open spec fn is_service_reply(c: SubtractionServiceConstants, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
+    {
+        &&& msgs.contains(m) 
+        &&& Self::parse_reply_spec(m.msg).is_some()
+        &&& !c.endpoints().contains(m.dest)
+        &&& c.endpoints().contains(m.src)
+        &&& !c.reserved_endpoints().contains(m.dest)
     }
 
     #[verifier::external_body]
@@ -66,26 +91,6 @@ impl ServiceState<SubtractionServiceConstants> for SubtractionService {
     proof fn parse_one_to_one(m1: Seq<u8>, m2: Seq<u8>) {}
 }
 
-impl ServiceInterface<SubtractionServiceConstants> for SubtractionService {
-    open spec fn is_service_request(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
-    {
-        &&& AbstractServiceInterface::is_service_request(s, m, msgs)
-        &&& !s.constants().reserved_endpoints().contains(m.src)
-    }
-
-    open spec fn is_service_reply(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>) -> bool
-    {
-        &&& AbstractServiceInterface::is_service_reply(s, m, msgs)
-        &&& !s.constants().reserved_endpoints().contains(m.dest)
-    }
-
-    proof fn service_request_abs(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>)
-    {}
-
-    proof fn service_reply_abs(s: Self, m: Message<Seq<u8>>, msgs: Set<Message<Seq<u8>>>)
-    {}
-}
-
 impl SubtractionService {
     pub open spec fn subtract_impl(pre: Self, post: Self, msg_ops: MessageOps, recv: Message<Seq<u8>>, send: Message<Seq<u8>>) -> bool {
         let p_request = Self::parse_request_spec(recv.msg);
@@ -93,8 +98,8 @@ impl SubtractionService {
         &&& pre.constants() == post.constants()
         &&& msg_ops.recv == set!{ recv }
         &&& msg_ops.send == set!{ send }
-        &&& Self::is_service_request(pre, recv, msg_ops.recv)
-        &&& Self::is_service_reply(pre, send, msg_ops.send)
+        &&& Self::is_service_request(pre.constants(), recv, msg_ops.recv)
+        &&& Self::is_service_reply(pre.constants(), send, msg_ops.send)
         &&& p_request.unwrap().x - p_request.unwrap().y >= 0
         &&& p_reply.unwrap() == SubtractionReply { 
             seq_no: p_request.unwrap().seq_no, 
@@ -111,7 +116,7 @@ impl SubtractionService {
     }
 }
 
-impl Service<SubtractionServiceConstants> for SubtractionService {
+impl StateMachineDefinition<SubtractionServiceConstants, MessageOps> for SubtractionService {
     open spec fn init(c: SubtractionServiceConstants, post: Self) -> bool
     { 
         &&& AbstractService::<SubtractionServiceConstants, Self>::init(c, post)
@@ -121,61 +126,10 @@ impl Service<SubtractionServiceConstants> for SubtractionService {
         &&& Self::subtract(pre, post, msg_ops)
     }
 
-    open spec fn inv(s: Self) -> bool {
-        forall |repl| #[trigger] s.replies().contains(repl) ==> 
-            exists |req| {
-                &&& #[trigger] s.requests().contains(req) 
-                &&& req.msg.x - req.msg.y >= 0
-                &&& repl.msg == SubtractionReply { seq_no: req.msg.seq_no, difference: (req.msg.x - req.msg.y) as u32 }
-                &&& repl.dest == req.src
-                &&& repl.src == req.dest
-            }
-    }
-
-    proof fn init_inv(c: SubtractionServiceConstants, post: Self)
-    { }
-
-    proof fn next_inv(pre: Self, post: Self, msg_ops: MessageOps)
+    open spec fn stutter(pre: Self, msg_ops: MessageOps) -> bool 
     {
-        assert(Self::subtract(pre, post, msg_ops));
-        let (recv, send) = choose |recv: Message<Seq<u8>>, send: Message<Seq<u8>>| Self::subtract_impl(pre, post, msg_ops, recv, send);
-        assert(Self::subtract_impl(pre, post, msg_ops, recv, send));
-        let parsed_recv = Self::parse_request_spec(recv.msg).unwrap();
-        let parsed_send = Self::parse_reply_spec(send.msg).unwrap();
-        assert forall |repl| #[trigger] post.replies().contains(repl) implies 
-            exists |req| {
-                &&& #[trigger] post.requests().contains(req) 
-                &&& req.msg.x - req.msg.y >= 0
-                &&& repl.msg == SubtractionReply { seq_no: req.msg.seq_no, difference: (req.msg.x - req.msg.y) as u32 }
-                &&& repl.dest == req.src
-                &&& repl.src == req.dest
-            }
-        by 
-        {
-            if (repl == send.replace_msg(parsed_send)) {
-                assert(post.replies().contains(send.replace_msg(parsed_send)));
-                assert(post.requests().contains(recv.replace_msg(parsed_recv)));
-            } else {
-                assert(pre.replies().contains(repl));
-                assert(Self::inv(pre));
-                let req = choose |req| {
-                    &&& #[trigger] pre.requests().contains(req) 
-                    &&& req.msg.x - req.msg.y >= 0
-                    &&& repl.msg == SubtractionReply { seq_no: req.msg.seq_no, difference: (req.msg.x - req.msg.y) as u32 }
-                    &&& repl.dest == req.src
-                    &&& repl.src == req.dest
-                };
-                assert(pre.requests().contains(req));
-                assert(post.requests().contains(req));
-            }
-        }
+        &&& AbstractService::<SubtractionServiceConstants, Self>::stutter(pre, msg_ops)
     }
-
-    proof fn init_abs(c: SubtractionServiceConstants, post: Self)
-    {}
-    
-    proof fn next_abs(pre: Self, post: Self, msg_ops: MessageOps)
-    {}
 }
 }
 

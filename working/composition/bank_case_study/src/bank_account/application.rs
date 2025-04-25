@@ -1,27 +1,32 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
-use crate::model::t__abstract_service::*;
-use crate::model::t__abstract_host::*;
+use crate::model::t__state_machine::*;
+use crate::model::t__networked_state_machine::*;
+use crate::model::t__service::*;
+use crate::model::t__application::*;
 use crate::addition::t__service::*;
 use crate::subtraction::t__service::*;
 use crate::bank_account::t__service::*;
 
 verus! {
 
-pub struct BankAccountHostConstants {
+pub struct BankAccountApplicationConstants {
     pub id_self: Endpoint, 
     pub id_addition_service: Endpoint,
     pub id_subtraction_service: Endpoint
 }
 
-impl HostConstants for BankAccountHostConstants {
+impl NetworkedStateMachineConstants for BankAccountApplicationConstants {
     open spec fn endpoints(&self) -> Set<Endpoint> {
         set! { self.id_self }
     }
 }
 
-pub struct BankAccountHost {
-    pub constants: BankAccountHostConstants,
+impl ApplicationConstants for BankAccountApplicationConstants {
+}
+
+pub struct BankAccountApplication {
+    pub constants: BankAccountApplicationConstants,
     pub requests: Seq<Message<BankAccountRequest>>, 
     pub replies: Seq<Message<BankAccountReply>>,
     pub balance: u32,
@@ -29,7 +34,17 @@ pub struct BankAccountHost {
     pub locked: Option<Message<BankAccountRequest>>
 }
 
-impl BankAccountHost {
+impl NetworkedStateMachine<BankAccountApplicationConstants> for BankAccountApplication {
+    open spec fn constants(&self) -> BankAccountApplicationConstants {
+        self.constants
+    }
+}
+
+impl ApplicationDefinition<BankAccountApplicationConstants> for BankAccountApplication {
+
+}
+
+impl BankAccountApplication {
     pub open spec fn receive_request_impl(pre: Self, post: Self, msg_ops: MessageOps, recv: Message<Seq<u8>>, send: Message<Seq<u8>>) -> bool
     {
         let parsed_recv = BankAccountService::parse_request_spec(recv.msg);
@@ -131,25 +146,31 @@ impl BankAccountHost {
 }
 
 
-impl Host<BankAccountServiceConstants, BankAccountService, BankAccountHostConstants> for BankAccountHost {
-    open spec fn constants(&self) -> BankAccountHostConstants {
-        self.constants
-    }
-    
-    open spec fn init_impl(c: BankAccountHostConstants, post: Self) -> bool {
+impl StateMachineDefinition<BankAccountApplicationConstants, MessageOps> for BankAccountApplication {    
+    open spec fn init(c: BankAccountApplicationConstants, post: Self) -> bool {
         &&& post.requests == Seq::<Message<BankAccountRequest>>::empty()
         &&& post.replies == Seq::<Message<BankAccountReply>>::empty()
         &&& post.balance == 0
         &&& post.next_seq_no == 0
         &&& post.locked.is_none()
+        &&& post.constants() == c
     }
 
-    open spec fn next_impl(pre: Self, post: Self, msg_ops: MessageOps) -> bool {
-        ||| Self::receive_request(pre, post, msg_ops)
-        ||| Self::receive_addition_response(pre, post, msg_ops)
-        ||| Self::receive_subtraction_response(pre, post, msg_ops)
+    open spec fn next(pre: Self, post: Self, msg_ops: MessageOps) -> bool {
+        &&& pre.constants() == post.constants()
+        &&& {
+            ||| Self::receive_request(pre, post, msg_ops)
+            ||| Self::receive_addition_response(pre, post, msg_ops)
+            ||| Self::receive_subtraction_response(pre, post, msg_ops)
+        }
     }
 
+    open spec fn stutter(pre: Self, d: MessageOps) -> bool {
+        false
+    }
+}
+
+impl StateMachine<BankAccountApplicationConstants, MessageOps> for BankAccountApplication {
     open spec fn inv(s: Self) -> bool {
         &&& s.requests.len() == s.next_seq_no
         &&& (forall |i| #![trigger s.requests[i]] 0 <= i < s.requests.len() ==> {
@@ -173,7 +194,7 @@ impl Host<BankAccountServiceConstants, BankAccountService, BankAccountHostConsta
         &&& s.replies.len() > 0 ==> s.balance == s.replies.last().msg.new_balance
     }
 
-    proof fn init_inv(c: BankAccountHostConstants, post: Self)
+    proof fn init_inv(c: BankAccountApplicationConstants, post: Self)
     {}
 
     proof fn next_inv(pre: Self, post: Self, msg_ops: MessageOps)
@@ -190,8 +211,10 @@ impl Host<BankAccountServiceConstants, BankAccountService, BankAccountHostConsta
             assert(Self::inv(post));
         }
     }
+}
 
-    proof fn init_abs(c: BankAccountHostConstants, post: Self) {}
+impl Application<BankAccountApplicationConstants> for BankAccountApplication {
+    proof fn init_abs(c: BankAccountApplicationConstants, post: Self) {}
 
     proof fn next_abs(pre: Self, post: Self, msg_ops: MessageOps) {}
 }
