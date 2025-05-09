@@ -1,7 +1,7 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
 use crate::model::t__socket::*;
-use crate::model::t__application::*;
+use crate::model::t__application_spec::*;
 use crate::model::t__host::*;
 
 verus! {
@@ -9,16 +9,16 @@ verus! {
 // Like Host, DistributedSystem is parameterized on a single ApplicationSpec. We can use ApplicationSpecComposition for polymorphism
 
 // DistributedSystemConfig defines what host are present in the system
-pub trait DistributedSystemConfig<AppSpec: ApplicationSpecWithInvariants, Config: HostConfig<AppSpec>> {
+pub trait DistributedSystemConfig<AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>> {
     spec fn valid(&self, hosts: Map<IPAddress, Host<AppSpec, Config>>) -> bool;
 }
 
-pub struct DistributedSystem<AppSpec: ApplicationSpecWithInvariants, Config: HostConfig<AppSpec>, SystemConfig: DistributedSystemConfig<AppSpec, Config>> {
+pub struct DistributedSystem<AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>, SystemConfig: DistributedSystemConfig<AppSpec, Config>> {
     pub hosts: Map<IPAddress, Host<AppSpec, Config>>,
     pub config: SystemConfig
 }
 
-impl<AppSpec: ApplicationSpecWithInvariants, Config: HostConfig<AppSpec>, SystemConfig: DistributedSystemConfig<AppSpec, Config>> DistributedSystem<AppSpec, Config, SystemConfig> {
+impl<AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>, SystemConfig: DistributedSystemConfig<AppSpec, Config>> DistributedSystem<AppSpec, Config, SystemConfig> {
     pub open spec fn remote_out(&self, ip: IPAddress) -> Map<SocketConnection, SocketOut<Seq<u8>>> {
         Map::new(|c: SocketConnection| self.hosts[ip].socket_in.dom().contains(c.to_remote()), |c: SocketConnection| self.hosts[c.local.ip].socket_out[c])
     }
@@ -96,8 +96,8 @@ impl<AppSpec: ApplicationSpecWithInvariants, Config: HostConfig<AppSpec>, System
     }
 }
 
-// User defined invariants on a host with a given config
-pub trait DistributedSystemInvariants<AppSpec: ApplicationSpecWithInvariants, Config: HostConfig<AppSpec>, SystemConfig: DistributedSystemConfig<AppSpec, Config>> {
+// User defined invariants on a system with a given config
+pub trait DistributedSystemInvariants<AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>, SystemConfig: DistributedSystemConfig<AppSpec, Config>> {
     spec fn inv(s: DistributedSystem<AppSpec, Config, SystemConfig>) -> bool
         ;
 

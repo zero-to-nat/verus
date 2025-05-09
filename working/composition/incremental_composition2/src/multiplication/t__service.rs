@@ -33,16 +33,4 @@ impl ServiceSpec<MultiplicationRequest, MultiplicationReply> for MultiplicationS
         &&& post.conn == pre.conn
     }
 }
-
-impl ServiceSpecWithInvariants<MultiplicationRequest, MultiplicationReply> for MultiplicationService {
-    open spec fn inv(s: Self) -> bool {
-        true
-    }
-
-    proof fn init_inv(c: Self::Constants, post: Self)
-    {}
-
-    proof fn next_inv(pre: Self, post: Self, msg_ops: MessageOps<MultiplicationRequest, MultiplicationReply>)
-    {}
-}
 }

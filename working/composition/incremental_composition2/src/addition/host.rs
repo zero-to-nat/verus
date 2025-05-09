@@ -1,6 +1,5 @@
 use vstd::prelude::*;
 use crate::model::t__socket::*;
-use crate::model::t__application::*;
 use crate::model::t__host::*;
 use crate::addition::application::*;
 
@@ -11,13 +10,14 @@ pub struct AdditionHostConfig {
     pub conn: SocketConnection
 }
 
-impl HostConfig<AdditionApplication> for AdditionHostConfig {
-    open spec fn valid(&self, host_apps: Seq<Application<AdditionApplication>>) -> bool {
+impl HostConfig<AdditionApplicationSpec> for AdditionHostConfig {
+    open spec fn valid(&self, host_apps: Seq<AdditionApplicationSpec>) -> bool {
         &&& 0 <= self.i < host_apps.len()
-        &&& host_apps[self.i].app.conn == self.conn
+        &&& host_apps[self.i].conn == self.conn
     }
 }
 
+/*
 pub struct AdditionHostInvariants {}
 
 impl HostInvariants<AdditionApplication, AdditionHostConfig> for AdditionHostInvariants {
@@ -31,4 +31,5 @@ impl HostInvariants<AdditionApplication, AdditionHostConfig> for AdditionHostInv
     proof fn next_inv(pre: Host<AdditionApplication, AdditionHostConfig>, post: Host<AdditionApplication, AdditionHostConfig>, remote: Map<SocketConnection, SocketOut<Seq<u8>>>)
     {}
 }
+    */
 }

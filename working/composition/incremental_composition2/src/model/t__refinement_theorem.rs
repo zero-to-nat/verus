@@ -3,7 +3,7 @@ use crate::model::t__types::*;
 use crate::model::t__parsing::*;
 use crate::model::t__socket::*;
 use crate::model::t__service::*;
-use crate::model::t__application::*;
+use crate::model::t__application_spec::*;
 use crate::model::t__host::*;
 use crate::model::t__distributed_system::*;
 
@@ -17,7 +17,7 @@ pub open spec fn parsed_socket_out<T: Parse>(socket_out: Map<SocketConnection, S
     Map::new(|c| socket_out.dom().contains(c), |c| SocketOut { conn: c, sent: socket_out[c].sent.map(|bytes| T::parse_spec(bytes).unwrap()) })
 }
 
-pub open spec fn service_abs<S: Parse, T : Parse, SvcSpec: ServiceSpecWithInvariants<S, T>, AppSpec: ApplicationSpecWithInvariants, Config: HostConfig<AppSpec>, SystemConfig: DistributedSystemConfig<AppSpec, Config>>(
+pub open spec fn service_abs<S: Parse, T : Parse, SvcSpec: ServiceSpec<S, T>, AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>, SystemConfig: DistributedSystemConfig<AppSpec, Config>>(
     ds: DistributedSystem<AppSpec, Config, SystemConfig>, 
     svc: SvcSpec,
     conns: (IPAddress, Set<SocketConnection>)) 
@@ -34,8 +34,8 @@ pub open spec fn service_abs<S: Parse, T : Parse, SvcSpec: ServiceSpecWithInvari
 
 pub trait Refinement<S: Parse, 
     T : Parse, 
-    SvcSpec: ServiceSpecWithInvariants<S, T>, 
-    AppSpec: ApplicationSpecWithInvariants,
+    SvcSpec: ServiceSpec<S, T>, 
+    AppSpec: ApplicationSpec,
     Config: HostConfig<AppSpec>, 
     SystemConfig: DistributedSystemConfig<AppSpec, Config>,
     Invariants: DistributedSystemInvariants<AppSpec, Config, SystemConfig>> 

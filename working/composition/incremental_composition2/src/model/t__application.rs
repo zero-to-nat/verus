@@ -1,48 +1,48 @@
 use vstd::prelude::*;
+use std::collections::hash_map::*;
 use crate::model::t__socket::*;
+use crate::model::t__application_spec::*;
 
 verus! {
 
-pub trait ApplicationSpec : Sized {
+pub open spec fn to_msgs_spec(map: HashMap<SocketConnection, Vec<Vec<u8>>>) -> Map<SocketConnection, Set<Seq<u8>>> {
+    Map::new(|c| map@.dom().contains(c), |c| map@[c]@.to_set().map(|m: Vec<u8>| m@))
+}
+
+pub trait ApplicationImpl<AppSpec: ApplicationSpec> : Sized {
     type Constants;
 
-    spec fn conns(&self) -> Set<SocketConnection>
+    spec fn abs(s: Self) -> AppSpec
         ;
 
-    spec fn init(c: Self::Constants, post: Self) -> bool 
+    spec fn c_abs(c: Self::Constants) -> AppSpec::Constants
         ;
 
-    spec fn next(pre: Self, post: Self, msg_ops: MessageOps<Seq<u8>, Seq<u8>>) -> bool
+    spec fn inv(&self) -> bool
         ;
 
-    proof fn next_impl(pre: Self, post: Self, msg_ops: MessageOps<Seq<u8>, Seq<u8>>)
-        requires 
-            Self::next(pre, post, msg_ops)
-        ensures 
-            pre.conns() == post.conns()
-        ;
-}
-
-pub trait ApplicationSpecWithInvariants : ApplicationSpec {
-    spec fn inv(s: Self) -> bool
+    spec fn init_pre(c: Self::Constants) -> bool
         ;
 
-    proof fn init_inv(c: Self::Constants, post: Self)
-        requires 
-            Self::init(c, post)
-        ensures 
-            Self::inv(post)
+    fn init(c: Self::Constants) -> (out: Self)
+        requires
+            Self::init_pre(c)
+        ensures
+            out.inv(),
+            AppSpec::init(Self::c_abs(c), Self::abs(out))
         ;
 
-    proof fn next_inv(pre: Self, post: Self, msg_ops: MessageOps<Seq<u8>, Seq<u8>>)
-        requires 
-            Self::inv(pre),
-            Self::next(pre, post, msg_ops)
-        ensures 
-            Self::inv(post)
+    fn next(&mut self, recv: (SocketConnection, Vec<u8>)) -> (send: (Option<HashMap<SocketConnection, Vec<Vec<u8>>>>))
+        requires
+            old(self).inv()
+        ensures
+            self.inv(),
+            (send.is_none() && Self::abs(*old(self)) == Self::abs(*self)) 
+            || (send.is_some() && AppSpec::next(Self::abs(*old(self)), Self::abs(*self), MessageOps { recv: map![recv.0 => set! {recv.1@}], send: to_msgs_spec(send.unwrap()) }))
         ;
 }
 
+/*
 pub struct Application<App: ApplicationSpecWithInvariants> {
     pub app: App
 }
@@ -109,4 +109,5 @@ impl<App: ApplicationSpecWithInvariants> Application<App> {
         App::next_inv(pre.app, post.app, msg_ops);
     }
 }
+    */
 }

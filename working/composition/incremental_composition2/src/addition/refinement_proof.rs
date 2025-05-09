@@ -3,7 +3,7 @@ use crate::model::t__types::*;
 use crate::model::t__parsing::*;
 use crate::model::t__socket::*;
 use crate::model::t__service::*;
-use crate::model::t__application::*;
+use crate::model::t__application_spec::*;
 use crate::model::t__host::*;
 use crate::model::t__distributed_system::*;
 use crate::model::t__refinement_theorem::*;
@@ -20,19 +20,19 @@ pub struct AdditionRefinement {}
 impl Refinement<AdditionRequest, 
     AdditionReply, 
     AdditionService, 
-    AdditionApplication, 
+    AdditionApplicationSpec, 
     AdditionHostConfig, 
     AdditionDistributedSystemConfig,
     AdditionDistributedSystemInvariants> 
 for AdditionRefinement {
-    open spec fn svc_state_abs(ds: DistributedSystem<AdditionApplication, AdditionHostConfig, AdditionDistributedSystemConfig>) -> AdditionService {
+    open spec fn svc_state_abs(ds: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>) -> AdditionService {
         let ip = ds.config.ip;
         let i = ds.config.host_config.i;
         
-        AdditionService { conn: ds.hosts[ip].apps[i].app.conn }
+        AdditionService { conn: ds.hosts[ip].apps[i].conn }
     }
     
-    open spec fn c_abs(c: (Map<IPAddress, (Seq<<AdditionApplication as ApplicationSpec>::Constants>, AdditionHostConfig)>, AdditionDistributedSystemConfig)) -> <AdditionService as ServiceSpec<AdditionRequest, AdditionReply>>::Constants {
+    open spec fn c_abs(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>, AdditionHostConfig)>, AdditionDistributedSystemConfig)) -> <AdditionService as ServiceSpec<AdditionRequest, AdditionReply>>::Constants {
         c.1.host_config.conn
     }
 
@@ -40,7 +40,7 @@ for AdditionRefinement {
         (config.ip, set!{ config.host_config.conn })
     }
 
-    proof fn init_refinement(c: (Map<IPAddress, (Seq<<AdditionApplication as ApplicationSpec>::Constants>, AdditionHostConfig)>, AdditionDistributedSystemConfig), post: DistributedSystem<AdditionApplication, AdditionHostConfig, AdditionDistributedSystemConfig>)
+    proof fn init_refinement(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>, AdditionHostConfig)>, AdditionDistributedSystemConfig), post: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>)
     {
         let ip = post.config.ip;
         let i = post.config.host_config.i;
@@ -61,7 +61,7 @@ for AdditionRefinement {
         }
     }
 
-    proof fn next_refinement(pre: DistributedSystem<AdditionApplication, AdditionHostConfig, AdditionDistributedSystemConfig>, post: DistributedSystem<AdditionApplication, AdditionHostConfig, AdditionDistributedSystemConfig>)
+    proof fn next_refinement(pre: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>, post: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>)
     {
         let ip = post.config.ip;
         let i = post.config.host_config.i;
@@ -88,7 +88,7 @@ for AdditionRefinement {
                 // step is on an application (not network delivery)
                 let step_i = choose |step_i| {
                     &&& 0 <= step_i < pre_host.apps.len()
-                    &&& Application::next(#[trigger] pre_host.apps[step_i], post_host.apps[step_i], pre_host.socket_in.restrict(pre_host.apps[step_i].conns()), pre_host.socket_out.restrict(pre_host.apps[step_i].conns()), post_host.socket_out.restrict(pre_host.apps[step_i].conns()))
+                    &&& Host::<AdditionApplicationSpec, AdditionHostConfig>::next_app(#[trigger] pre_host.apps[step_i], post_host.apps[step_i], pre_host.socket_in.restrict(pre_host.apps[step_i].conns()), pre_host.socket_out.restrict(pre_host.apps[step_i].conns()), post_host.socket_out.restrict(pre_host.apps[step_i].conns()))
                     &&& forall |j| 0 <= j < pre_host.apps.len() && step_i != j ==> {
                         &&& #[trigger] pre_host.apps[j] == post_host.apps[j]
                     }
@@ -105,11 +105,11 @@ for AdditionRefinement {
                     let pre_app_socket_out = pre_host.socket_out.restrict(pre_app.conns());
                     let post_app_socket_out = post_host.socket_out.restrict(pre_app.conns());
 
-                    assert(Application::next(#[trigger] pre_app, post_app, pre_app_socket_in, pre_app_socket_out, post_app_socket_out));
+                    assert(Host::<AdditionApplicationSpec, AdditionHostConfig>::next_app(#[trigger] pre_app, post_app, pre_app_socket_in, pre_app_socket_out, post_app_socket_out));
                     let msg_ops = choose |msg_ops: MessageOps<Seq<u8>, Seq<u8>>| {
                         &&& msg_ops.recv.dom() == pre_app.conns()
                         &&& msg_ops.send.dom() == pre_app.conns()
-                        &&& #[trigger] AdditionApplication::next(pre_app.app, post_app.app, msg_ops)
+                        &&& #[trigger] AdditionApplicationSpec::next(pre_app, post_app, msg_ops)
                         &&& (forall |c| #[trigger] msg_ops.recv.dom().contains(c) ==> SocketIn::can_read(pre_app_socket_in[c], msg_ops.recv[c]))
                         &&& (forall |c| #[trigger] msg_ops.send.dom().contains(c) ==> SocketOut::next(pre_app_socket_out[c], post_app_socket_out[c], msg_ops.send[c]))
                     };
@@ -117,8 +117,12 @@ for AdditionRefinement {
                     let (req, repl) = choose |req: Seq<u8>, repl: Seq<u8>| {
                         let parsed_req = AdditionRequest::parse_spec(req).unwrap();
                         let parsed_repl = AdditionReply::parse_spec(repl).unwrap();
-                        &&& msg_ops.recv == map![pre_app.app.conn => set!{req}]
-                        &&& msg_ops.send == map![pre_app.app.conn => set!{repl}]
+                        &&& msg_ops.recv.dom() == Set::<SocketConnection>::empty().insert(pre_app.conn)
+                        &&& msg_ops.send.dom() == Set::<SocketConnection>::empty().insert(pre_app.conn)
+                        &&& msg_ops.recv[pre_app.conn].contains(req)
+                        &&& (forall |m| msg_ops.recv[pre_app.conn].contains(m) ==> m == req)
+                        &&& msg_ops.send[pre_app.conn].contains(repl)
+                        &&& (forall |m| msg_ops.send[pre_app.conn].contains(m) ==> m == repl)
                         &&& #[trigger] AdditionRequest::parse_spec(req).is_some()
                         &&& #[trigger] AdditionReply::parse_spec(repl).is_some()
                         &&& parsed_req.x + parsed_req.y <= u32::MAX
@@ -129,10 +133,10 @@ for AdditionRefinement {
                     let parsed_req = AdditionRequest::parse_spec(req).unwrap();
                     let parsed_repl = AdditionReply::parse_spec(repl).unwrap();
 
-                    assert(msg_ops.send.dom().contains(pre_app.app.conn));
-                    assert(post_app_socket_out[pre_app.app.conn].sent == pre_app_socket_out[pre_app.app.conn].sent.insert(repl));
+                    assert(msg_ops.send.dom().contains(pre_app.conn));
+                    assert(post_app_socket_out[pre_app.conn].sent == pre_app_socket_out[pre_app.conn].sent.insert(repl));
 
-                    let parsed_msg_ops = MessageOps { recv: map![pre_app.app.conn => set!{parsed_req}], send: map![pre_app.app.conn => set!{parsed_repl}]};
+                    let parsed_msg_ops = MessageOps { recv: map![pre_app.conn => set!{parsed_req}], send: map![pre_app.conn => set!{parsed_repl}]};
                     assert(AdditionService::next(pre_service.service, post_service.service, parsed_msg_ops));
                     assert(parsed_msg_ops.recv.dom() == pre_service.service.conns() && msg_ops.send.dom() == pre_service.service.conns());
                     assert forall |c| #[trigger] parsed_msg_ops.recv.dom().contains(c) implies 

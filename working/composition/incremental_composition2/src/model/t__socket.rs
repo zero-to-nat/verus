@@ -3,15 +3,53 @@ use crate::model::t__types::*;
 
 verus! {
 
+#[derive(Hash)]
 pub struct SocketConnection {
     pub local: Endpoint,
     pub remote: Endpoint,
+}
+
+impl PartialEq for SocketConnection {
+    fn eq(&self, other: &Self) -> (out: bool)
+        ensures out == self.eq_spec(other)
+    {
+        &&& self.local.ip == other.local.ip
+        &&& self.local.port == other.local.port
+        &&& self.remote.ip == other.remote.ip
+        &&& self.remote.port == other.remote.port
+    }
+}
+
+impl Eq for SocketConnection {}
+
+impl Clone for SocketConnection {
+    fn clone(&self) -> Self {
+        SocketConnection { local: self.local.clone(), remote: self.remote.clone() }
+    }
+}
+
+impl Copy for SocketConnection {
+}
+
+impl View for SocketConnection {
+    type V = SocketConnection;
+
+    open spec fn view(&self) -> Self::V {
+        *self
+    }
 }
 
 impl SocketConnection {
     pub open spec fn to_remote(&self) -> SocketConnection {
         SocketConnection { local: self.remote, remote: self.local }
     }
+
+    pub open spec fn eq_spec(&self, other: &Self) -> bool {
+        &&& self.local.ip == other.local.ip
+        &&& self.local.port == other.local.port
+        &&& self.remote.ip == other.remote.ip
+        &&& self.remote.port == other.remote.port
+    }        
 }
 
 #[verifier::reject_recursive_types(S)]
@@ -42,6 +80,7 @@ impl<T> SocketOut<T> {
         // })
     }
 
+    /*
     pub open spec fn inv(s: Self) -> bool {
         // &&& (forall |m| #[trigger] s.sent.contains(m) ==> {
         //     &&& m.src == s.conn.local
@@ -64,6 +103,7 @@ impl<T> SocketOut<T> {
         ensures 
             Self::inv(post)
     {}
+            */
 }
 
 #[verifier::reject_recursive_types(T)]
@@ -102,6 +142,7 @@ impl<T> SocketIn<T> {
         })
     }
 
+    /*
     pub open spec fn inv(s: Self) -> bool {
         // &&& (forall |m| #[trigger] s.received.contains(m) ==> {
         //     &&& m.src == s.conn.remote
@@ -124,5 +165,6 @@ impl<T> SocketIn<T> {
         ensures 
             Self::inv(post)
     {}
+            */
 }
 }

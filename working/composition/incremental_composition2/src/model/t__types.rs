@@ -5,10 +5,19 @@ verus! {
 pub type IPAddress = u32;
 pub type Port = u16;
 
+#[derive(Hash)]
 pub struct Endpoint {
     pub ip: IPAddress, 
     pub port: Port
 }
+
+impl PartialEq for Endpoint {
+    fn eq(&self, other: &Self) -> bool {
+        self.ip == other.ip && self.port == other.port
+    }
+}
+
+impl Eq for Endpoint {}
 
 impl Clone for Endpoint {
     fn clone(&self) -> Self {

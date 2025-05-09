@@ -1,21 +1,21 @@
 use vstd::prelude::*;
 use crate::model::t__socket::*;
-use crate::model::t__application::*;
+use crate::model::t__application_spec::*;
 
 verus! {
 
 // A binary option between two application specs. Used for polymorphic composition of applications on a host
-pub enum ApplicationSpecComposition<A: ApplicationSpecWithInvariants, B: ApplicationSpecWithInvariants> {
+pub enum ApplicationSpecComposition<A: ApplicationSpec, B: ApplicationSpec> {
     A(A),
     B(B)
 }
 
-pub enum ApplicationSpecCompositionConstants<A: ApplicationSpecWithInvariants, B: ApplicationSpecWithInvariants> {
+pub enum ApplicationSpecCompositionConstants<A: ApplicationSpec, B: ApplicationSpec> {
     A(A::Constants),
     B(B::Constants)
 }
 
-impl<A: ApplicationSpecWithInvariants, B: ApplicationSpecWithInvariants> ApplicationSpec for ApplicationSpecComposition<A, B> {
+impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpec for ApplicationSpecComposition<A, B> {
     type Constants = ApplicationSpecCompositionConstants<A, B>;
 
     open spec fn conns(&self) -> Set<SocketConnection> {
@@ -57,7 +57,8 @@ impl<A: ApplicationSpecWithInvariants, B: ApplicationSpecWithInvariants> Applica
     }
 }
 
-impl<A: ApplicationSpecWithInvariants, B: ApplicationSpecWithInvariants> ApplicationSpecWithInvariants for ApplicationSpecComposition<A, B> {
+/*
+impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpecWithInvariants for ApplicationSpecComposition<A, B> {
     open spec fn inv(s: Self) -> bool {
         match s {
             ApplicationSpecComposition::A(a) => A::inv(a),
@@ -95,8 +96,9 @@ impl<A: ApplicationSpecWithInvariants, B: ApplicationSpecWithInvariants> Applica
         }
     }
 }
+    */
 
-impl<A: ApplicationSpecWithInvariants, B: ApplicationSpecWithInvariants> ApplicationSpecComposition<A, B> {
+impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpecComposition<A, B> {
     pub open spec fn get_impl(self) -> Option<A> {
         match self {
             ApplicationSpecComposition::A(app) => Some(app),
@@ -112,7 +114,7 @@ impl<A: ApplicationSpecWithInvariants, B: ApplicationSpecWithInvariants> Applica
     }
 }
 
-impl<A: ApplicationSpecWithInvariants, B: ApplicationSpecWithInvariants, C: ApplicationSpecWithInvariants> ApplicationSpecComposition<A, ApplicationSpecComposition<B, C>>
+impl<A: ApplicationSpec, B: ApplicationSpec, C: ApplicationSpec> ApplicationSpecComposition<A, ApplicationSpecComposition<B, C>>
 {
     pub open spec fn associate(self) -> ApplicationSpecComposition<ApplicationSpecComposition<A, B>, C> {
         match self {
@@ -146,6 +148,7 @@ impl ApplicationSpec for EmptyApplication {
     {}
 }
 
+/*
 impl ApplicationSpecWithInvariants for EmptyApplication {
     open spec fn inv(s: Self) -> bool {
         true
@@ -157,8 +160,9 @@ impl ApplicationSpecWithInvariants for EmptyApplication {
     proof fn next_inv(pre: Self, post: Self, msg_ops: MessageOps<Seq<u8>, Seq<u8>>)
     {}
 }
+    */
 
 // Top-level type for arbitrary composition
-pub type HostApplicationSpec<A: ApplicationSpecWithInvariants> = ApplicationSpecComposition<A, EmptyApplication>;
+pub type HostApplicationSpec<A: ApplicationSpec> = ApplicationSpecComposition<A, EmptyApplication>;
 
 }
