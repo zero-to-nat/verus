@@ -4,7 +4,6 @@ use crate::model::t__parsing::*;
 use crate::model::t__socket::*;
 use crate::model::t__service::*;
 use crate::model::t__application_spec::*;
-use crate::model::t__host::*;
 use crate::model::t__distributed_system::*;
 
 verus! {
@@ -17,8 +16,8 @@ pub open spec fn parsed_socket_out<T: Parse>(socket_out: Map<SocketConnection, S
     Map::new(|c| socket_out.dom().contains(c), |c| SocketOut { conn: c, sent: socket_out[c].sent.map(|bytes| T::parse_spec(bytes).unwrap()) })
 }
 
-pub open spec fn service_abs<S: Parse, T : Parse, SvcSpec: ServiceSpec<S, T>, AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>, SystemConfig: DistributedSystemConfig<AppSpec, Config>>(
-    ds: DistributedSystem<AppSpec, Config, SystemConfig>, 
+pub open spec fn service_abs<S: Parse, T : Parse, SvcSpec: ServiceSpec<S, T>, AppSpec: ApplicationSpec>(
+    ds: DistributedSystem<AppSpec>, 
     svc: SvcSpec,
     conns: (IPAddress, Set<SocketConnection>)) 
 -> Service<S, T, SvcSpec> {
@@ -36,34 +35,36 @@ pub trait Refinement<S: Parse,
     T : Parse, 
     SvcSpec: ServiceSpec<S, T>, 
     AppSpec: ApplicationSpec,
-    Config: HostConfig<AppSpec>, 
-    SystemConfig: DistributedSystemConfig<AppSpec, Config>,
-    Invariants: DistributedSystemInvariants<AppSpec, Config, SystemConfig>> 
+    /*Config: HostConfig<AppSpec>, 
+    SystemConfig: DistributedSystemConfig<AppSpec, Config>,*/
+    Config: DistributedSystemConfig<AppSpec>,
+    Invariants: DistributedSystemInvariants<AppSpec, Config>> 
 {
-    spec fn svc_state_abs(ds: DistributedSystem<AppSpec, Config, SystemConfig>) -> SvcSpec
+    spec fn svc_state_abs(ds: DistributedSystem<AppSpec >) -> SvcSpec
         ;
     
-    spec fn c_abs(c: (Map<IPAddress, (Seq<AppSpec::Constants>, Config)>, SystemConfig)) -> SvcSpec::Constants
+    spec fn c_abs(c: (Map<IPAddress, (Seq<AppSpec::Constants>/*, Config*/)>/*, SystemConfig*/)) -> SvcSpec::Constants
         ;
 
-    spec fn conns_abs(config: SystemConfig) -> (IPAddress, Set<SocketConnection>)
+    spec fn conns_abs(ds: DistributedSystem<AppSpec >) -> (IPAddress, Set<SocketConnection>)
         ;
     
-    proof fn init_refinement(c: (Map<IPAddress, (Seq<AppSpec::Constants>, Config)>, SystemConfig), post: DistributedSystem<AppSpec, Config, SystemConfig>)
+    proof fn init_refinement(c: (Map<IPAddress, (Seq<AppSpec::Constants>/*, Config*/)>/*, SystemConfig*/), post: DistributedSystem<AppSpec>)
         requires
-            DistributedSystem::init(c, post)
+            DistributedSystem::init(c, post),
+            Config::config(post)
         ensures
-           Service::init(Self::c_abs(c), service_abs(post, Self::svc_state_abs(post), Self::conns_abs(c.1)))
+           Service::init(Self::c_abs(c), service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post)))
         ;
     
-    proof fn next_refinement(pre: DistributedSystem<AppSpec, Config, SystemConfig>, post: DistributedSystem<AppSpec, Config, SystemConfig>)
+    proof fn next_refinement(pre: DistributedSystem<AppSpec>, post: DistributedSystem<AppSpec>)
         requires
             DistributedSystem::next(pre, post),
             DistributedSystem::inv(pre),
             Invariants::inv(pre)
         ensures
-           Service::next(service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre.config)), service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post.config)), parsed_socket_out::<S>(pre.remote_out(Self::conns_abs(pre.config).0))) 
-           || service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre.config)) == service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post.config))
+           Service::next(service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre)), service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post)), parsed_socket_out::<S>(pre.remote_out(Self::conns_abs(pre).0))) 
+           || service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre)) == service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post))
         ;
 }
 }

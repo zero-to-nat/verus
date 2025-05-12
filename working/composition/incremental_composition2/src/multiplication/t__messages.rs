@@ -4,6 +4,7 @@ use crate::model::t__parsing::*;
 
 verus! {
 
+#[derive(Eq, Hash, PartialEq, Clone, Copy)]
 pub struct MultiplicationRequest {
     pub seq_no: SeqNo, 
     pub x: u32, 

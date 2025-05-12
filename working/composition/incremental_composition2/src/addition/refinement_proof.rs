@@ -10,7 +10,6 @@ use crate::model::t__refinement_theorem::*;
 use crate::addition::t__messages::*;
 use crate::addition::t__service::*;
 use crate::addition::application::*;
-use crate::addition::host::*;
 use crate::addition::distributed_system::*;
 
 verus! {
@@ -21,33 +20,29 @@ impl Refinement<AdditionRequest,
     AdditionReply, 
     AdditionService, 
     AdditionApplicationSpec, 
-    AdditionHostConfig, 
     AdditionDistributedSystemConfig,
     AdditionDistributedSystemInvariants> 
 for AdditionRefinement {
-    open spec fn svc_state_abs(ds: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>) -> AdditionService {
-        let ip = ds.config.ip;
-        let i = ds.config.host_config.i;
-        
-        AdditionService { conn: ds.hosts[ip].apps[i].conn }
+    open spec fn svc_state_abs(ds: DistributedSystem<AdditionApplicationSpec>) -> AdditionService {
+        AdditionService { conn: ds.hosts[0].apps[0].conn }
     }
     
-    open spec fn c_abs(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>, AdditionHostConfig)>, AdditionDistributedSystemConfig)) -> <AdditionService as ServiceSpec<AdditionRequest, AdditionReply>>::Constants {
-        c.1.host_config.conn
+    open spec fn c_abs(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>)>)) -> <AdditionService as ServiceSpec<AdditionRequest, AdditionReply>>::Constants {
+        c[0][0]
     }
 
-    open spec fn conns_abs(config: AdditionDistributedSystemConfig) -> (IPAddress, Set<SocketConnection>) {
-        (config.ip, set!{ config.host_config.conn })
+    open spec fn conns_abs(ds: DistributedSystem<AdditionApplicationSpec>) -> (IPAddress, Set<SocketConnection>) {
+        (0, set!{ ds.hosts[0].apps[0].conn })
     }
 
-    proof fn init_refinement(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>, AdditionHostConfig)>, AdditionDistributedSystemConfig), post: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>)
+    proof fn init_refinement(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>)>), post: DistributedSystem<AdditionApplicationSpec>)
     {
-        let ip = post.config.ip;
-        let i = post.config.host_config.i;
-        let service = service_abs(post, Self::svc_state_abs(post), Self::conns_abs(c.1));
+        assert(AdditionDistributedSystemConfig::config(post));
+        let ip = 0;
+        let service = service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post));
         let service_conns = service.service.conns();
 
-        assert(Host::init(c.0[ip], post.hosts[ip]));
+        assert(Host::init(c[ip], post.hosts[ip]));
 
         assert(service.socket_in.dom() == service_conns);
         assert(service.socket_out.dom() == service_conns);
@@ -61,12 +56,12 @@ for AdditionRefinement {
         }
     }
 
-    proof fn next_refinement(pre: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>, post: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>)
+    proof fn next_refinement(pre: DistributedSystem<AdditionApplicationSpec>, post: DistributedSystem<AdditionApplicationSpec>)
     {
-        let ip = post.config.ip;
-        let i = post.config.host_config.i;
-        let pre_service = service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre.config));
-        let post_service = service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post.config));
+        let ip = 0;
+        let i = 0;
+        let pre_service = service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre));
+        let post_service = service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post));
 
         DistributedSystem::next_inv(pre, post);
         AdditionDistributedSystemInvariants::next_inv(pre, post);
@@ -88,7 +83,7 @@ for AdditionRefinement {
                 // step is on an application (not network delivery)
                 let step_i = choose |step_i| {
                     &&& 0 <= step_i < pre_host.apps.len()
-                    &&& Host::<AdditionApplicationSpec, AdditionHostConfig>::next_app(#[trigger] pre_host.apps[step_i], post_host.apps[step_i], pre_host.socket_in.restrict(pre_host.apps[step_i].conns()), pre_host.socket_out.restrict(pre_host.apps[step_i].conns()), post_host.socket_out.restrict(pre_host.apps[step_i].conns()))
+                    &&& Host::<AdditionApplicationSpec>::next_app(#[trigger] pre_host.apps[step_i], post_host.apps[step_i], pre_host.socket_in.restrict(pre_host.apps[step_i].conns()), pre_host.socket_out.restrict(pre_host.apps[step_i].conns()), post_host.socket_out.restrict(pre_host.apps[step_i].conns()))
                     &&& forall |j| 0 <= j < pre_host.apps.len() && step_i != j ==> {
                         &&& #[trigger] pre_host.apps[j] == post_host.apps[j]
                     }
@@ -105,7 +100,7 @@ for AdditionRefinement {
                     let pre_app_socket_out = pre_host.socket_out.restrict(pre_app.conns());
                     let post_app_socket_out = post_host.socket_out.restrict(pre_app.conns());
 
-                    assert(Host::<AdditionApplicationSpec, AdditionHostConfig>::next_app(#[trigger] pre_app, post_app, pre_app_socket_in, pre_app_socket_out, post_app_socket_out));
+                    assert(Host::<AdditionApplicationSpec>::next_app(#[trigger] pre_app, post_app, pre_app_socket_in, pre_app_socket_out, post_app_socket_out));
                     let msg_ops = choose |msg_ops: MessageOps<Seq<u8>, Seq<u8>>| {
                         &&& msg_ops.recv.dom() == pre_app.conns()
                         &&& msg_ops.send.dom() == pre_app.conns()

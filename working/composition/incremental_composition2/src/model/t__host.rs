@@ -7,24 +7,21 @@ verus! {
 
 // Host is parameterized on a single ApplicationSpec, but we can use ApplicationSpecComposition to enable polymorphism with this type
 
-// HostConfig defines what applications are present on the host
-pub trait HostConfig<AppSpec: ApplicationSpec> {
-    spec fn valid(&self, host_apps: Seq<AppSpec>) -> bool;
-}
-
-pub struct Host<AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>> {
+pub struct Host<AppSpec: ApplicationSpec> {
     pub ip: IPAddress,
     pub apps: Seq<AppSpec>,
     pub socket_in: Map<SocketConnection, SocketIn<Seq<u8>>>,
     pub socket_out: Map<SocketConnection, SocketOut<Seq<u8>>>,
-    pub config: Config
 }
 
-impl<AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>> Host<AppSpec, Config> {
-    pub open spec fn init(c: (Seq<AppSpec::Constants>, Config), post: Self) -> bool {
-        &&& post.config == c.1
-        &&& c.1.valid(post.apps)
-        &&& c.0.len() == post.apps.len()
+pub trait HostConfig<AppSpec: ApplicationSpec> {
+    spec fn config(host: Host<AppSpec>) -> bool
+        ;
+}
+
+impl<AppSpec: ApplicationSpec> Host<AppSpec> {
+    pub open spec fn init(c: (Seq<AppSpec::Constants>), post: Self) -> bool {
+        &&& c.len() == post.apps.len()
         &&& post.socket_in.dom() == post.socket_out.dom()
         &&& forall |conn| #[trigger] post.socket_in.dom().contains(conn) ==> {
             &&& conn.local.ip == post.ip
@@ -34,9 +31,9 @@ impl<AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>> Host<AppSpec, Config
         &&& forall |i| 0 <= i < post.apps.len() ==> {
             let conns = post.apps[i].conns();
             &&& conns.subset_of(post.socket_in.dom())
-            &&& AppSpec::init(c.0[i], #[trigger] post.apps[i])
+            &&& AppSpec::init(c[i], #[trigger] post.apps[i])
         }
-        &&& forall |i, j| 0 <= i < c.0.len() && 0 <= j < c.0.len() && i != j ==> {
+        &&& forall |i, j| 0 <= i < c.len() && 0 <= j < c.len() && i != j ==> {
             post.apps[i].conns().disjoint(post.apps[j].conns())
         }
     }
@@ -70,14 +67,12 @@ impl<AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>> Host<AppSpec, Config
         &&& pre.socket_in == post.socket_in
         &&& pre.socket_out.dom() == post.socket_out.dom()
         &&& pre.apps.len() == post.apps.len()
-        &&& pre.config == post.config
     }
 
     pub open spec fn step_recv(pre: Self, post: Self, remote: Map<SocketConnection, SocketOut<Seq<u8>>>) -> bool {
         &&& pre.ip == post.ip
         &&& pre.apps == post.apps
         &&& pre.socket_out == post.socket_out
-        &&& pre.config == post.config
         &&& pre.socket_in.dom() == post.socket_in.dom()
         &&& (forall |c| #[trigger] pre.socket_in.dom().contains(c) ==> 
         {
@@ -104,7 +99,7 @@ impl<AppSpec: ApplicationSpec, Config: HostConfig<AppSpec>> Host<AppSpec, Config
         }    
     }
 
-    pub proof fn init_inv(c: (Seq<AppSpec::Constants>, Config), post: Self)
+    pub proof fn init_inv(c: (Seq<AppSpec::Constants>), post: Self)
         requires 
             Self::init(c, post)
         ensures 

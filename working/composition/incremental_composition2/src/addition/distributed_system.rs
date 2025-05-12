@@ -8,29 +8,27 @@ use crate::addition::host::*;
 
 verus! {
 
-pub struct AdditionDistributedSystemConfig {
-    pub ip: IPAddress,
-    pub host_config: AdditionHostConfig
-}
+pub struct AdditionDistributedSystemConfig {}
 
-impl DistributedSystemConfig<AdditionApplicationSpec, AdditionHostConfig> for AdditionDistributedSystemConfig {
-    open spec fn valid(&self, hosts: Map<IPAddress, Host<AdditionApplicationSpec, AdditionHostConfig>>) -> bool {
-        &&& hosts.dom().contains(self.ip)
-        &&& self.host_config.valid(hosts[self.ip].apps)
+impl DistributedSystemConfig<AdditionApplicationSpec> for AdditionDistributedSystemConfig {
+    open spec fn config(ds: DistributedSystem<AdditionApplicationSpec>) -> bool {
+        &&& ds.hosts.dom().len() == 1
+        &&& ds.hosts.dom().contains(0)
+        &&& AdditionHostConfig::config(ds.hosts[0])
     }
 }
 
 pub struct AdditionDistributedSystemInvariants {}
 
-impl DistributedSystemInvariants<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig> for AdditionDistributedSystemInvariants {
-    open spec fn inv(s: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>) -> bool {
-        s.config.valid(s.hosts)
+impl DistributedSystemInvariants<AdditionApplicationSpec, AdditionDistributedSystemConfig> for AdditionDistributedSystemInvariants {
+    open spec fn inv(s: DistributedSystem<AdditionApplicationSpec>) -> bool {
+        AdditionDistributedSystemConfig::config(s)
     }
 
-    proof fn init_inv(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>, AdditionHostConfig)>, AdditionDistributedSystemConfig), post: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>)
+    proof fn init_inv(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>)>), post: DistributedSystem<AdditionApplicationSpec>)
     {}
 
-    proof fn next_inv(pre: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>, post: DistributedSystem<AdditionApplicationSpec, AdditionHostConfig, AdditionDistributedSystemConfig>)
+    proof fn next_inv(pre: DistributedSystem<AdditionApplicationSpec>, post: DistributedSystem<AdditionApplicationSpec>)
     {}
 }
 }

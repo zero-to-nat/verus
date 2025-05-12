@@ -57,52 +57,18 @@ impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpec for ApplicationSpec
     }
 }
 
-/*
-impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpecWithInvariants for ApplicationSpecComposition<A, B> {
-    open spec fn inv(s: Self) -> bool {
-        match s {
-            ApplicationSpecComposition::A(a) => A::inv(a),
-            ApplicationSpecComposition::B(b) => B::inv(b)
-        }
-    }
-
-    proof fn init_inv(c: Self::Constants, post: Self)
-    {
-        match (post, c) {
-            (ApplicationSpecComposition::A(a), ApplicationSpecCompositionConstants::A(c_a)) => {
-                A::init_inv(c_a, a);
-            },
-            (ApplicationSpecComposition::B(b), ApplicationSpecCompositionConstants::B(c_b)) => {
-                B::init_inv(c_b, b);
-            }
-            _ => {
-                assert(false);
-            }
-        };
-    }
-
-    proof fn next_inv(pre: Self, post: Self, msg_ops: MessageOps<Seq<u8>, Seq<u8>>)
-    {
-        match (pre, post) {
-            (ApplicationSpecComposition::A(pre_a), ApplicationSpecComposition::A(post_a)) => {
-                A::next_inv(pre_a, post_a, msg_ops);
-            },
-            (ApplicationSpecComposition::B(pre_b), ApplicationSpecComposition::B(post_b)) => {
-                B::next_inv(pre_b, post_b, msg_ops);
-            },
-            _ => {
-                assert(false);
-            }
-        }
-    }
-}
-    */
-
 impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpecComposition<A, B> {
-    pub open spec fn get_impl(self) -> Option<A> {
+    pub open spec fn get_impl_first(self) -> Option<A> {
         match self {
             ApplicationSpecComposition::A(app) => Some(app),
             ApplicationSpecComposition::B(_) => None
+        }
+    }
+
+    pub open spec fn get_impl_second(self) -> Option<B> {
+        match self {
+            ApplicationSpecComposition::A(_) => None,
+            ApplicationSpecComposition::B(app) => Some(app)
         }
     }
 
@@ -147,22 +113,5 @@ impl ApplicationSpec for EmptyApplication {
     proof fn next_impl(pre: Self, post: Self, msg_ops: MessageOps<Seq<u8>, Seq<u8>>)
     {}
 }
-
-/*
-impl ApplicationSpecWithInvariants for EmptyApplication {
-    open spec fn inv(s: Self) -> bool {
-        true
-    }
-
-    proof fn init_inv(c: Self::Constants, post: Self)
-    {}
-
-    proof fn next_inv(pre: Self, post: Self, msg_ops: MessageOps<Seq<u8>, Seq<u8>>)
-    {}
-}
-    */
-
-// Top-level type for arbitrary composition
-pub type HostApplicationSpec<A: ApplicationSpec> = ApplicationSpecComposition<A, EmptyApplication>;
 
 }

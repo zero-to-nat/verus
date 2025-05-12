@@ -1,35 +1,18 @@
 use vstd::prelude::*;
-use crate::model::t__socket::*;
+use crate::model::t__types::*;
 use crate::model::t__host::*;
 use crate::addition::application::*;
 
 verus! {
 
-pub struct AdditionHostConfig {
-    pub i: int,
-    pub conn: SocketConnection
-}
+pub struct AdditionHostConfig {}
 
 impl HostConfig<AdditionApplicationSpec> for AdditionHostConfig {
-    open spec fn valid(&self, host_apps: Seq<AdditionApplicationSpec>) -> bool {
-        &&& 0 <= self.i < host_apps.len()
-        &&& host_apps[self.i].conn == self.conn
+    open spec fn config(host: Host<AdditionApplicationSpec>) -> bool {
+        &&& host.apps.len() == 1
+        &&& host.ip == 0
+        &&& host.apps[0].conn.local == Endpoint { ip: 0, port: 0 }
     }
 }
 
-/*
-pub struct AdditionHostInvariants {}
-
-impl HostInvariants<AdditionApplication, AdditionHostConfig> for AdditionHostInvariants {
-    open spec fn inv(s: Host<AdditionApplication, AdditionHostConfig>) -> bool {
-        s.config.valid(s.apps)
-    }
-
-    proof fn init_inv(c: (Seq<<AdditionApplication as ApplicationSpec>::Constants>, AdditionHostConfig), post: Host<AdditionApplication, AdditionHostConfig>)
-    {}
-
-    proof fn next_inv(pre: Host<AdditionApplication, AdditionHostConfig>, post: Host<AdditionApplication, AdditionHostConfig>, remote: Map<SocketConnection, SocketOut<Seq<u8>>>)
-    {}
-}
-    */
 }
