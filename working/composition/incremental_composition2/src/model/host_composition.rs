@@ -29,5 +29,19 @@ impl<A: ApplicationSpec, B: ApplicationSpec> Host<ApplicationSpecComposition<A, 
         else 
             { None }
     }
+
+    pub open spec fn get_constants_first(c: Seq<<ApplicationSpecComposition<A, B> as ApplicationSpec>::Constants>) -> Option<Seq<A::Constants>> {
+        if (forall |i| #![trigger c[i]] 0 <= i < c.len() ==> c[i].get_impl_first().is_some())
+            { Some(c.map_values(|c: ApplicationSpecCompositionConstants<A, B>| c.get_impl_first().unwrap()))}
+        else 
+            { None }
+    }
+
+    pub open spec fn get_constants_second(c: Seq<<ApplicationSpecComposition<A, B> as ApplicationSpec>::Constants>) -> Option<Seq<B::Constants>> {
+        if (forall |i| #![trigger c[i]] 0 <= i < c.len() ==> c[i].get_impl_second().is_some())
+            { Some(c.map_values(|c: ApplicationSpecCompositionConstants<A, B>| c.get_impl_second().unwrap()))}
+        else 
+            { None }
+    }
 }
 }

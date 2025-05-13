@@ -57,6 +57,22 @@ impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpec for ApplicationSpec
     }
 }
 
+impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpecCompositionConstants<A, B> {
+    pub open spec fn get_impl_first(self) -> Option<A::Constants> {
+        match self {
+            ApplicationSpecCompositionConstants::A(c) => Some(c),
+            ApplicationSpecCompositionConstants::B(_) => None
+        }
+    }
+
+    pub open spec fn get_impl_second(self) -> Option<B::Constants> {
+        match self {
+            ApplicationSpecCompositionConstants::A(_) => None,
+            ApplicationSpecCompositionConstants::B(c) => Some(c)
+        }
+    }
+}
+
 impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpecComposition<A, B> {
     pub open spec fn get_impl_first(self) -> Option<A> {
         match self {

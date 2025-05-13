@@ -18,8 +18,8 @@ pub struct DistributedSystem<AppSpec: ApplicationSpec> {
 }
 
 impl<AppSpec: ApplicationSpec> DistributedSystem<AppSpec> {
-    pub open spec fn remote_out(&self, ip: IPAddress) -> Map<SocketConnection, SocketOut<Seq<u8>>> {
-        Map::new(|c: SocketConnection| self.hosts[ip].socket_in.dom().contains(c.to_remote()), |c: SocketConnection| self.hosts[c.local.ip].socket_out[c])
+    pub open spec fn union_socket_out(&self) -> Map<SocketConnection, SocketOut<Seq<u8>>> {
+        Map::new(|c: SocketConnection| self.hosts.dom().contains(c.local.ip) && self.hosts[c.local.ip].socket_out.dom().contains(c), |c: SocketConnection| self.hosts[c.local.ip].socket_out[c])
     }
 
     pub open spec fn init(c: (Map<IPAddress, (Seq<AppSpec::Constants>)>), post: Self) -> bool {
@@ -30,14 +30,15 @@ impl<AppSpec: ApplicationSpec> DistributedSystem<AppSpec> {
         }
     }
 
-    pub open spec fn next(pre: Self, post: Self) -> bool {
+    pub open spec fn next(pre: Self, post: Self, external_sockets: Map<SocketConnection, SocketOut<Seq<u8>>>) -> bool {
         &&& exists |ip| {
             &&& pre.hosts.dom().contains(ip)
-            &&& Host::next(#[trigger] pre.hosts[ip], post.hosts[ip], pre.remote_out(ip))
+            &&& Host::next(#[trigger] pre.hosts[ip], post.hosts[ip], external_sockets.union_prefer_right(pre.union_socket_out()))
             &&& forall |other_ip| #[trigger] pre.hosts.dom().contains(other_ip) && ip != other_ip ==> {
                 pre.hosts[other_ip] == post.hosts[other_ip]
             }
         }
+        //&&& (forall |ip| #[trigger] pre.hosts.dom().contains(ip) ==> pre.hosts[ip].socket_out.dom().disjoint(external_sockets.dom()))
         &&& pre.hosts.dom() == post.hosts.dom()
     }
 
@@ -62,21 +63,21 @@ impl<AppSpec: ApplicationSpec> DistributedSystem<AppSpec> {
         }
     }
 
-    pub proof fn next_inv(pre: Self, post: Self)
+    pub proof fn next_inv(pre: Self, post: Self, external_sockets: Map<SocketConnection, SocketOut<Seq<u8>>>)
         requires 
             Self::inv(pre),
-            Self::next(pre, post)
+            Self::next(pre, post, external_sockets)
         ensures 
             Self::inv(post),
     {
         let ip = choose |ip| {
             &&& pre.hosts.dom().contains(ip)
-            &&& Host::next(#[trigger] pre.hosts[ip], post.hosts[ip], pre.remote_out(ip))
+            &&& Host::next(#[trigger] pre.hosts[ip], post.hosts[ip], external_sockets.union_prefer_right(pre.union_socket_out()))
             &&& forall |other_ip| #[trigger] pre.hosts.dom().contains(other_ip) && ip != other_ip ==> {
                 pre.hosts[other_ip] == post.hosts[other_ip]
             }
         };
-        Host::next_inv(pre.hosts[ip], post.hosts[ip], pre.remote_out(ip));
+        Host::next_inv(pre.hosts[ip], post.hosts[ip], external_sockets.union_prefer_right(pre.union_socket_out()));
     }
 }
 
@@ -93,10 +94,10 @@ pub trait DistributedSystemInvariants<AppSpec: ApplicationSpec, Config: Distribu
             Self::inv(post),
         ;
 
-    proof fn next_inv(pre: DistributedSystem<AppSpec>, post: DistributedSystem<AppSpec>)
+    proof fn next_inv(pre: DistributedSystem<AppSpec>, post: DistributedSystem<AppSpec>, external_sockets: Map<SocketConnection, SocketOut<Seq<u8>>>)
         requires 
             Self::inv(pre),
-            DistributedSystem::next(pre, post)
+            DistributedSystem::next(pre, post, external_sockets)
         ensures 
             Self::inv(post)
         ;

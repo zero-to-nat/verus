@@ -1,5 +1,6 @@
 use vstd::prelude::*;
 use crate::model::t__types::*;
+use crate::model::t__socket::*;
 use crate::model::t__application_spec::*;
 use crate::model::t__host::*;
 use crate::model::t__distributed_system::*;
@@ -28,7 +29,7 @@ impl DistributedSystemInvariants<AdditionApplicationSpec, AdditionDistributedSys
     proof fn init_inv(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>)>), post: DistributedSystem<AdditionApplicationSpec>)
     {}
 
-    proof fn next_inv(pre: DistributedSystem<AdditionApplicationSpec>, post: DistributedSystem<AdditionApplicationSpec>)
+    proof fn next_inv(pre: DistributedSystem<AdditionApplicationSpec>, post: DistributedSystem<AdditionApplicationSpec>, external_sockets: Map<SocketConnection, SocketOut<Seq<u8>>>)
     {}
 }
 }

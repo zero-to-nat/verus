@@ -35,21 +35,19 @@ pub trait Refinement<S: Parse,
     T : Parse, 
     SvcSpec: ServiceSpec<S, T>, 
     AppSpec: ApplicationSpec,
-    /*Config: HostConfig<AppSpec>, 
-    SystemConfig: DistributedSystemConfig<AppSpec, Config>,*/
     Config: DistributedSystemConfig<AppSpec>,
     Invariants: DistributedSystemInvariants<AppSpec, Config>> 
 {
     spec fn svc_state_abs(ds: DistributedSystem<AppSpec >) -> SvcSpec
         ;
     
-    spec fn c_abs(c: (Map<IPAddress, (Seq<AppSpec::Constants>/*, Config*/)>/*, SystemConfig*/)) -> SvcSpec::Constants
+    spec fn c_abs(c: (Map<IPAddress, (Seq<AppSpec::Constants>)>)) -> SvcSpec::Constants
         ;
 
     spec fn conns_abs(ds: DistributedSystem<AppSpec >) -> (IPAddress, Set<SocketConnection>)
         ;
     
-    proof fn init_refinement(c: (Map<IPAddress, (Seq<AppSpec::Constants>/*, Config*/)>/*, SystemConfig*/), post: DistributedSystem<AppSpec>)
+    proof fn init_refinement(c: (Map<IPAddress, (Seq<AppSpec::Constants>)>), post: DistributedSystem<AppSpec>)
         requires
             DistributedSystem::init(c, post),
             Config::config(post)
@@ -57,13 +55,13 @@ pub trait Refinement<S: Parse,
            Service::init(Self::c_abs(c), service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post)))
         ;
     
-    proof fn next_refinement(pre: DistributedSystem<AppSpec>, post: DistributedSystem<AppSpec>)
+    proof fn next_refinement(pre: DistributedSystem<AppSpec>, post: DistributedSystem<AppSpec>, external_sockets: Map<SocketConnection, SocketOut<Seq<u8>>>)
         requires
-            DistributedSystem::next(pre, post),
+            DistributedSystem::next(pre, post, external_sockets),
             DistributedSystem::inv(pre),
             Invariants::inv(pre)
         ensures
-           Service::next(service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre)), service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post)), parsed_socket_out::<S>(pre.remote_out(Self::conns_abs(pre).0))) 
+           Service::next(service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre)), service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post)), parsed_socket_out::<S>(external_sockets.union_prefer_right(pre.union_socket_out()))) 
            || service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre)) == service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post))
         ;
 }

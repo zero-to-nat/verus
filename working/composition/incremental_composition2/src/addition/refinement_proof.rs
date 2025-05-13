@@ -56,19 +56,19 @@ for AdditionRefinement {
         }
     }
 
-    proof fn next_refinement(pre: DistributedSystem<AdditionApplicationSpec>, post: DistributedSystem<AdditionApplicationSpec>)
+    proof fn next_refinement(pre: DistributedSystem<AdditionApplicationSpec>, post: DistributedSystem<AdditionApplicationSpec>, external_sockets: Map<SocketConnection, SocketOut<Seq<u8>>>)
     {
         let ip = 0;
         let i = 0;
         let pre_service = service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre));
         let post_service = service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post));
 
-        DistributedSystem::next_inv(pre, post);
-        AdditionDistributedSystemInvariants::next_inv(pre, post);
+        DistributedSystem::next_inv(pre, post, external_sockets);
+        AdditionDistributedSystemInvariants::next_inv(pre, post, external_sockets);
 
         let step_ip = choose |step_ip| {
             &&& pre.hosts.dom().contains(step_ip)
-            &&& Host::next(#[trigger] pre.hosts[step_ip], post.hosts[step_ip], pre.remote_out(step_ip))
+            &&& Host::next(#[trigger] pre.hosts[step_ip], post.hosts[step_ip], external_sockets.union_prefer_right(pre.union_socket_out()))
             &&& forall |other_ip| #[trigger] pre.hosts.dom().contains(other_ip) && step_ip != other_ip ==> {
                 pre.hosts[other_ip] == post.hosts[other_ip]
             }
@@ -77,7 +77,6 @@ for AdditionRefinement {
             // step is on addition service's host
             let pre_host = pre.hosts[ip];
             let post_host = post.hosts[ip];
-            let remote_out = pre.remote_out(ip);
 
             if (Host::step_app(pre_host, post_host)) {
                 // step is on an application (not network delivery)
@@ -175,7 +174,7 @@ for AdditionRefinement {
                 }
             } else {
                 // step is network delivery
-                assert(Host::step_recv(pre_host, post_host, remote_out));
+                assert(Host::step_recv(pre_host, post_host, external_sockets.union_prefer_right(pre.union_socket_out())));
             }
         } else {
             // step is on another host
