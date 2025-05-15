@@ -43,6 +43,7 @@ impl<S : Parse, T : Parse, Svc : ServiceSpec<S, T>> Service<S, T, Svc> {
         &&& pre.service.conns() == post.service.conns()
         &&& pre.socket_in == post.socket_in
         &&& pre.socket_out.dom() == post.socket_out.dom()
+        &&& pre.ip == post.ip
         &&& exists |msg_ops: MessageOps<S, T>| {
             &&& msg_ops.recv.dom() == pre.service.conns()
             &&& msg_ops.send.dom() == pre.service.conns()
@@ -56,6 +57,7 @@ impl<S : Parse, T : Parse, Svc : ServiceSpec<S, T>> Service<S, T, Svc> {
         &&& pre.service == post.service
         &&& pre.socket_out == post.socket_out
         &&& pre.socket_in.dom() == post.socket_in.dom()
+        &&& pre.ip == post.ip
         &&& (forall |c| #[trigger] pre.socket_in.dom().contains(c) ==> 
         {
             &&& remote.dom().contains(c.to_remote())

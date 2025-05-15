@@ -5,8 +5,7 @@ use crate::multiplication::application::*;
 
 verus! {
 
-pub struct InductiveMultiplicationHostConfig {
-}
+pub struct InductiveMultiplicationHostConfig {}
 
 impl HostConfig<InductiveMultiplicationApplicationSpec> for InductiveMultiplicationHostConfig {
     open spec fn config(host: Host<InductiveMultiplicationApplicationSpec>) -> bool {

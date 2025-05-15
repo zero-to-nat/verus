@@ -9,13 +9,11 @@ use crate::model::t__host::*;
 use crate::model::t__distributed_system::*;
 use crate::model::t__refinement_theorem::*;
 use crate::model::application_composition::*;
-use crate::model::distributed_system_composition::*;
 use crate::addition::t__service::*;
 use crate::addition::t__messages::*;
 use crate::multiplication::t__messages::*;
 use crate::multiplication::t__service::*;
 use crate::multiplication::application::*;
-use crate::multiplication::host::*;
 use crate::multiplication::distributed_system::*;
 
 verus! {
@@ -39,7 +37,7 @@ Refinement<MultiplicationRequest,
     MultiplicationReply, 
     MultiplicationService, 
     ApplicationSpecComposition<AppSpec, InductiveMultiplicationApplicationSpec>, 
-    DistributedSystemConfigComposition<AppSpec, InductiveMultiplicationApplicationSpec, Config, InductiveMultiplicationDistributedSystemConfig>,
+    InductiveMultiplicationDistributedSystemCompositionConfig<AppSpec, Config, Invariants, RefinementProof>,
     InductiveMultiplicationDistributedSystemCompositionInvariants<AppSpec, Config, Invariants, RefinementProof>> 
 for MultiplicationRefinement<AppSpec, Config, Invariants, RefinementProof> {
 

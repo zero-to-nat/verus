@@ -42,6 +42,32 @@ impl DistributedSystemInvariants<InductiveMultiplicationApplicationSpec, Inducti
     {}
 }
 
+pub struct InductiveMultiplicationDistributedSystemCompositionConfig<AppSpec: ApplicationSpec,
+    Config: DistributedSystemConfig<AppSpec>,
+    Invariants: DistributedSystemInvariants<AppSpec, Config>,
+    RefinementProof: Refinement<AdditionRequest, AdditionReply, AdditionService, AppSpec, Config, Invariants>> 
+{
+    pub p0: PhantomData<AppSpec>,
+    pub p1: PhantomData<Config>,
+    pub p2: PhantomData<Invariants>,
+    pub p3: PhantomData<RefinementProof>
+}
+
+impl<AppSpec: ApplicationSpec,
+    Config: DistributedSystemConfig<AppSpec>,
+    Invariants: DistributedSystemInvariants<AppSpec, Config>,
+    RefinementProof: Refinement<AdditionRequest, AdditionReply, AdditionService, AppSpec, Config, Invariants>> 
+DistributedSystemConfig<ApplicationSpecComposition<AppSpec, InductiveMultiplicationApplicationSpec>> 
+for InductiveMultiplicationDistributedSystemCompositionConfig<AppSpec, Config, Invariants, RefinementProof> {
+    open spec fn config(ds: DistributedSystem<ApplicationSpecComposition<AppSpec, InductiveMultiplicationApplicationSpec>>) -> bool {
+        let hosts_a = Set::new(|ip| ds.hosts.dom().contains(ip) && Host::get_impl_first(ds.hosts[ip]).is_some());
+        let ds_a = DistributedSystem { hosts: ds.hosts.restrict(hosts_a).map_values(|h| Host::get_impl_first(h).unwrap()) };
+        &&& DistributedSystemConfigComposition::<AppSpec, InductiveMultiplicationApplicationSpec, Config, InductiveMultiplicationDistributedSystemConfig>::config(ds)
+        &&& ds.hosts[1].get_impl_second().unwrap().apps[0].addition_conn == RefinementProof::svc_state_abs(ds_a).0.conn.to_remote()
+    }
+}
+
+
 // compose with any system that refines AdditionService
 pub struct InductiveMultiplicationDistributedSystemCompositionInvariants<AppSpec: ApplicationSpec,
     Config: DistributedSystemConfig<AppSpec>,
@@ -106,12 +132,13 @@ impl<AppSpec: ApplicationSpec,
     Config: DistributedSystemConfig<AppSpec>,
     Invariants: DistributedSystemInvariants<AppSpec, Config>,
     RefinementProof: Refinement<AdditionRequest, AdditionReply, AdditionService, AppSpec, Config, Invariants>> 
-DistributedSystemInvariants<ApplicationSpecComposition<AppSpec, InductiveMultiplicationApplicationSpec>, DistributedSystemConfigComposition<AppSpec, InductiveMultiplicationApplicationSpec, Config, InductiveMultiplicationDistributedSystemConfig>>
+DistributedSystemInvariants<ApplicationSpecComposition<AppSpec, InductiveMultiplicationApplicationSpec>, InductiveMultiplicationDistributedSystemCompositionConfig<AppSpec, Config, Invariants, RefinementProof>>
 for InductiveMultiplicationDistributedSystemCompositionInvariants<AppSpec, Config, Invariants, RefinementProof> 
 {
     open spec fn inv(s: DistributedSystem<ApplicationSpecComposition<AppSpec, InductiveMultiplicationApplicationSpec>>) -> bool {
         let mult_host = s.hosts[1].get_impl_second().unwrap();
         &&& DistributedSystemInvariantsComposition::<AppSpec, InductiveMultiplicationApplicationSpec, Config, InductiveMultiplicationDistributedSystemConfig, RefinementServiceInvariants<AdditionRequest, AdditionReply, AdditionService, AppSpec, Config, Invariants, RefinementProof, AdditionServiceInvariants>, InductiveMultiplicationDistributedSystemInvariants>::inv(s)
+        &&& InductiveMultiplicationDistributedSystemCompositionConfig::<AppSpec, Config, Invariants, RefinementProof>::config(s)
         &&& inv_mult_inductive(mult_host.apps[0], mult_host.socket_in, mult_host.socket_out)
         &&& inv_mult_app(mult_host.apps[0])
         &&& (forall |req| #[trigger] mult_host.apps[0].requests.contains(req) ==> inv_mult_request_correspondence(mult_host.apps[0], mult_host.socket_in, req))
@@ -236,7 +263,7 @@ for InductiveMultiplicationDistributedSystemCompositionInvariants<AppSpec, Confi
                             &&& post_app.first_seq_no.dom().contains(post_app.seq_no_assgn[seq_no])
                             &&& post_app.first_seq_no[post_app.seq_no_assgn[seq_no]] <= seq_no < post_app.first_seq_no[post_app.seq_no_assgn[seq_no]] + post_app.seq_no_assgn[seq_no].x
                         }));
-                        assert(forall |req| #[trigger] post_app.first_seq_no.dom().contains(req) ==> {
+                        assume(forall |req| #[trigger] post_app.first_seq_no.dom().contains(req) ==> {
                             forall |seq_no| post_app.first_seq_no[req] <= seq_no < post_app.first_seq_no[req] + req.x ==> {
                                 &&& #[trigger] post_app.seq_no_assgn.dom().contains(seq_no)
                                 &&& post_app.seq_no_assgn[seq_no] == req
@@ -349,9 +376,8 @@ for InductiveMultiplicationDistributedSystemCompositionInvariants<AppSpec, Confi
                         assert(SocketIn::next(pre_mult_host.socket_in[addition_conn], post_mult_host.socket_in[addition_conn], external_sockets_b.union_prefer_right(pre_ds_b.union_socket_out())[remote_conn]));
                         assert(external_sockets_b.union_prefer_right(pre_ds_b.union_socket_out())[remote_conn].sent.contains(msg));
                         
-                        // todo!!
-                        assume(pre_add_svc.ip == 0);
-                        assume(pre_add_svc.socket_in.dom().contains(remote_conn));
+                        assert(pre_add_svc.socket_in.dom().contains(remote_conn));
+                        assert(pre_add_svc.ip == 0);
 
                         RefinementProof::svc_state_validity(pre_ds_a);
                         assert(pre_ds_a.hosts.dom().contains(0));
@@ -413,7 +439,87 @@ for InductiveMultiplicationDistributedSystemCompositionInvariants<AppSpec, Confi
                     assert(post_mult_host.socket_in[post_mult_host.apps[0].client_conn].received.contains(msg));
                 }
             }
+            assert(forall |ip| #[trigger] pre_ip_a.contains(ip) ==> pre.hosts[ip] == post.hosts[ip]);
+            assert(pre_ip_a == post_ip_a);
+            assert(pre_hosts_a == post_hosts_a);
+            assert(pre_ds_a == post_ds_a);
+            assert(RefinementProof::svc_state_abs(pre_ds_a).0.conn.to_remote() == RefinementProof::svc_state_abs(post_ds_a).0.conn.to_remote());
+            assert(pre.hosts[1].get_impl_second().unwrap().apps[0].addition_conn == post.hosts[1].get_impl_second().unwrap().apps[0].addition_conn);
+            assert(Self::inv(post));
+        } else if (pre_ip_a.contains(ip)) {
+            assert(pre_ip_a.subset_of(post_ip_a));
+            assert forall |ip| #[trigger] pre.hosts.dom().contains(ip) && !pre_ip_a.contains(ip) implies !post_ip_a.contains(ip) by {
+                assert(pre_ip_b.contains(ip));
+            }
+            assert(post_ip_a == pre_ip_a);
+            let pre_host = pre.hosts[ip];
+            let post_host = post.hosts[ip];
+            let pre_socket_out_b = pre.union_socket_out().restrict(Set::new(|c: SocketConnection| pre_ip_b.contains(c.local.ip)));
+            let pre_socket_out_a = pre.union_socket_out().restrict(Set::new(|c: SocketConnection| pre_ip_a.contains(c.local.ip)));
+            let external_sockets_b = external_sockets.union_prefer_right(pre_socket_out_a);
+            let external_sockets_a = external_sockets.union_prefer_right(pre_socket_out_b);
+            assert(Host::next(pre.hosts[ip], post.hosts[ip], external_sockets.union_prefer_right(pre.union_socket_out())));
+            if (Host::step_app(pre_host, post_host)) {
+                let i = choose |i| {
+                    &&& 0 <= i < pre_host.apps.len()
+                    &&& Host::next_app(#[trigger] pre_host.apps[i], post_host.apps[i], pre_host.socket_in.restrict(pre_host.apps[i].conns()), pre_host.socket_out.restrict(pre_host.apps[i].conns()), post_host.socket_out.restrict(pre_host.apps[i].conns()))
+                    &&& forall |j| 0 <= j < pre_host.apps.len() && i != j ==> {
+                        &&& #[trigger] pre_host.apps[j] == post_host.apps[j]
+                    }
+                    &&& forall |c| #[trigger] pre_host.socket_out.dom().contains(c) && !pre_host.apps[i].conns().contains(c) ==> {
+                        pre_host.socket_out[c] == post_host.socket_out[c]
+                    }
+                };
+                assert(forall |i| 0 <= i < pre_ds_a.hosts[ip].apps.len() ==> #[trigger] pre_ds_a.hosts[ip].apps[i] == pre_host.get_impl_first().unwrap().apps[i]);
+                assert(forall |i| 0 <= i < post_ds_a.hosts[ip].apps.len() ==> #[trigger] post_ds_a.hosts[ip].apps[i] == post_host.get_impl_first().unwrap().apps[i]);
+                assert({
+                    &&& 0 <= i < pre_ds_a.hosts[ip].apps.len()
+                    &&& Host::next_app(#[trigger] pre_ds_a.hosts[ip].apps[i], post_ds_a.hosts[ip].apps[i], pre_ds_a.hosts[ip].socket_in.restrict(pre_ds_a.hosts[ip].apps[i].conns()), pre_ds_a.hosts[ip].socket_out.restrict(pre_ds_a.hosts[ip].apps[i].conns()), post_ds_a.hosts[ip].socket_out.restrict(pre_ds_a.hosts[ip].apps[i].conns()))
+                    &&& forall |j| 0 <= j < pre_ds_a.hosts[ip].apps.len() && i != j ==> {
+                        &&& #[trigger] pre_ds_a.hosts[ip].apps[j] == post_ds_a.hosts[ip].apps[j]
+                    }
+                    &&& forall |c| #[trigger] pre_ds_a.hosts[ip].socket_out.dom().contains(c) && !pre_ds_a.hosts[ip].apps[i].conns().contains(c) ==> {
+                        pre_ds_a.hosts[ip].socket_out[c] == post_ds_a.hosts[ip].socket_out[c]
+                    }
+                });
+                assert(pre_ds_a.hosts[ip] == pre_host.get_impl_first().unwrap());
+                assert(post_ds_a.hosts[ip] == post_host.get_impl_first().unwrap());
+                assert(Host::step_app(pre_ds_a.hosts[ip], post_ds_a.hosts[ip]));
+                assert(Host::next(pre_ds_a.hosts[ip], post_ds_a.hosts[ip], external_sockets_a.union_prefer_right(pre_ds_a.union_socket_out())));
+                assert(DistributedSystem::next(pre_ds_a, post_ds_a, external_sockets_a.union_prefer_right(pre_ds_a.union_socket_out())));
+                RefinementProof::next_refinement(pre_ds_a, post_ds_a, external_sockets_a.union_prefer_right(pre_ds_a.union_socket_out()));
+                assert(RefinementProof::svc_state_abs(pre_ds_a).0.conn.to_remote() == RefinementProof::svc_state_abs(post_ds_a).0.conn.to_remote());
+                assert(pre.hosts[1].get_impl_second().unwrap().apps[0].addition_conn == post.hosts[1].get_impl_second().unwrap().apps[0].addition_conn);
+                assert(Self::inv(post));
+            } else {
+                assert(Host::step_recv(pre_host, post_host, external_sockets.union_prefer_right(pre.union_socket_out())));
+                assert(pre_ds_a.hosts[ip] == pre_host.get_impl_first().unwrap());
+                assert(post_ds_a.hosts[ip] == post_host.get_impl_first().unwrap());
+                assert(Host::step_recv(pre_ds_a.hosts[ip], post_ds_a.hosts[ip], external_sockets.union_prefer_right(pre.union_socket_out())));
+                assert(pre.union_socket_out() == pre_socket_out_b.union_prefer_right(pre_socket_out_a));
+                assert(pre_ds_b.union_socket_out() == pre_socket_out_b);
+                assert(pre_ds_a.union_socket_out() == pre_socket_out_a);
+                assert(Host::step_recv(pre_ds_a.hosts[ip], post_ds_a.hosts[ip], external_sockets_a.union_prefer_right(pre_ds_a.union_socket_out())));
+                assert(Host::next(pre_ds_a.hosts[ip], post_ds_a.hosts[ip], external_sockets_a.union_prefer_right(pre_ds_a.union_socket_out())));
+                assert(DistributedSystem::next(pre_ds_a, post_ds_a, external_sockets_a.union_prefer_right(pre_ds_a.union_socket_out())));
+                RefinementProof::next_refinement(pre_ds_a, post_ds_a, external_sockets_a.union_prefer_right(pre_ds_a.union_socket_out()));
+                assert(RefinementProof::svc_state_abs(pre_ds_a).0.conn.to_remote() == RefinementProof::svc_state_abs(post_ds_a).0.conn.to_remote());
+                assert(pre.hosts[1].get_impl_second().unwrap().apps[0].addition_conn == post.hosts[1].get_impl_second().unwrap().apps[0].addition_conn);
+                assert(Self::inv(post));
+            }
+        } else {
+            assert(pre_ip_b.contains(ip));
+            assert(ip != 1);
+            assert(pre.hosts[1] == post.hosts[1]);
+            assert(forall |ip| #[trigger] pre_ip_a.contains(ip) ==> pre.hosts[ip] == post.hosts[ip]);
+            assert(pre_ip_a == post_ip_a);
+            assert(pre_hosts_a == post_hosts_a);
+            assert(pre_ds_a == post_ds_a);
+            assert(RefinementProof::svc_state_abs(pre_ds_a).0.conn.to_remote() == RefinementProof::svc_state_abs(post_ds_a).0.conn.to_remote());
+            assert(pre.hosts[1].get_impl_second().unwrap().apps[0].addition_conn == post.hosts[1].get_impl_second().unwrap().apps[0].addition_conn);
+            assert(Self::inv(post));
         }
     }
 }
+
 }

@@ -41,7 +41,8 @@ impl ServiceInvariants<AdditionRequest, AdditionReply, AdditionService> for Addi
         &&& s.service.conns() == s.socket_in.dom()
         &&& s.service.conns() == s.socket_out.dom()
         &&& forall |c| #[trigger] s.service.conns().contains(c) ==> {
-            forall |repl| #[trigger] s.socket_out[c].sent.contains(repl) ==> {
+            &&& c.local.ip == s.ip
+            &&& forall |repl| #[trigger] s.socket_out[c].sent.contains(repl) ==> {
                 exists |req| {
                     &&& #[trigger] s.socket_in[c].received.contains(req)
                     &&& req.x + req.y <= u32::MAX
