@@ -3,6 +3,8 @@ use crate::model::t__socket::*;
 
 verus! {
 
+// An application is specified as a state machine which can receive messages and send messages on a set of sockets (conns()).
+// Note that unlike a service, an application must receive and send bytes.
 pub trait ApplicationSpec : Sized {
     type Constants;
 
@@ -22,26 +24,4 @@ pub trait ApplicationSpec : Sized {
             pre.conns() == post.conns()
         ;
 }
-
-/*
-pub trait ApplicationSpecWithInvariants : ApplicationSpec {
-    spec fn inv(s: Self) -> bool
-        ;
-
-    proof fn init_inv(c: Self::Constants, post: Self)
-        requires 
-            Self::init(c, post)
-        ensures 
-            Self::inv(post)
-        ;
-
-    proof fn next_inv(pre: Self, post: Self, msg_ops: MessageOps<Seq<u8>, Seq<u8>>)
-        requires 
-            Self::inv(pre),
-            Self::next(pre, post, msg_ops)
-        ensures 
-            Self::inv(post)
-        ;
-}
-        */
 }

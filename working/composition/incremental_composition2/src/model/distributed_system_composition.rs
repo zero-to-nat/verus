@@ -9,6 +9,8 @@ use crate::model::t__distributed_system::*;
 
 verus! {
 
+// Define a base config for a distributed system composition.
+// This config ensures that the sub-systems are disjoint and applies the given configs for the sub-systems.
 pub struct DistributedSystemConfigComposition<A: ApplicationSpec, 
     B: ApplicationSpec, 
     ConfigA: DistributedSystemConfig<A>,
@@ -36,7 +38,7 @@ for DistributedSystemConfigComposition<A, B, ConfigA, ConfigB> {
     }
 }
 
-// Invariants hold on composition
+// Given invariants for two sub-systems, show that they hold on their composition, using the base composition config (above).
 pub struct DistributedSystemInvariantsComposition<A: ApplicationSpec, 
     B: ApplicationSpec, 
     ConfigA: DistributedSystemConfig<A>,

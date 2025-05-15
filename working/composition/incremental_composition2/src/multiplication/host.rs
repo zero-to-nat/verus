@@ -7,6 +7,7 @@ verus! {
 
 pub struct InductiveMultiplicationHostConfig {}
 
+// This config hardcodes the IP addresses and ports for this host and the addition service it uses.
 impl HostConfig<InductiveMultiplicationApplicationSpec> for InductiveMultiplicationHostConfig {
     open spec fn config(host: Host<InductiveMultiplicationApplicationSpec>) -> bool {
         &&& host.apps.len() == 1

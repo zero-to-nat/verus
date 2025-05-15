@@ -9,6 +9,12 @@ use crate::model::t__distributed_system::*;
 
 verus! {
 
+// The abstraction function for this refinement proof is broken into a few pieces,
+// since some of it is derived from the shared trusted model.
+
+// The user defines svc_state_abs (in the Refinement trait below) which creates the state machine for the service specification.
+// Then, service_abs "lifts" the sockets from the distributed system into the sockets for the service (which have parsed versions of the messages on the socket).
+
 pub open spec fn parsed_socket_in<S: Parse>(socket_in: Map<SocketConnection, SocketIn<Seq<u8>>>) -> Map<SocketConnection, SocketIn<S>> {
     Map::new(|c| socket_in.dom().contains(c), |c| SocketIn { conn: c, received: socket_in[c].received.map(|bytes| S::parse_spec(bytes).unwrap()) })
 }
@@ -56,8 +62,6 @@ pub trait Refinement<S: Parse,
             DistributedSystem::inv(ds),
             Invariants::inv(ds)
         ensures
-            // forall |c| #[trigger] ds.hosts[Self::svc_state_abs(ds).1].socket_in.restrict(Self::svc_state_abs(ds).0.conns()).dom().contains(c) ==> 
-            //     forall |bytes| #[trigger] ds.hosts[Self::svc_state_abs(ds).1].socket_in[c].received.contains(bytes) ==> S::parse_spec(bytes).is_some(),
             forall |c| #[trigger] ds.hosts[Self::svc_state_abs(ds).1].socket_out.restrict(Self::svc_state_abs(ds).0.conns()).dom().contains(c) ==> 
                 forall |bytes| #[trigger] ds.hosts[Self::svc_state_abs(ds).1].socket_out[c].sent.contains(bytes) ==> T::parse_spec(bytes).is_some(),
         ;
@@ -103,6 +107,8 @@ pub struct RefinementServiceInvariants<S: Parse,
     pub p7: PhantomData<SvcInvariants>
 }
 
+// Lift any invariants for the service to a invariant on the distributed system that refines that service. 
+// (this is useful in a composition)
 impl<S: Parse, 
     T : Parse, 
     SvcSpec: ServiceSpec<S, T>, 

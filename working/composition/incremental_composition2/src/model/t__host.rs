@@ -5,8 +5,10 @@ use crate::model::t__application_spec::*;
 
 verus! {
 
-// Host is parameterized on a single ApplicationSpec, but we can use ApplicationSpecComposition to enable polymorphism with this type
-
+// A host is modeled as a set of applications running on that host, 
+// each of which use a disjoint set of the sockets for that host and given IP address.
+// The Host type is parameterized on a single ApplicationSpec, 
+// but we can use ApplicationSpecComposition to enable polymorphism with this type.
 pub struct Host<AppSpec: ApplicationSpec> {
     pub ip: IPAddress,
     pub apps: Seq<AppSpec>,
@@ -14,11 +16,14 @@ pub struct Host<AppSpec: ApplicationSpec> {
     pub socket_out: Map<SocketConnection, SocketOut<Seq<u8>>>,
 }
 
+// User-defined properties that must hold on initialization for a host.
 pub trait HostConfig<AppSpec: ApplicationSpec> {
     spec fn config(host: Host<AppSpec>) -> bool
         ;
 }
 
+// A host steps by having any one of its applications step (step_app) 
+// or by delivering messages to its socket inboxes from the given remote socket outboxes (step_recv).
 impl<AppSpec: ApplicationSpec> Host<AppSpec> {
     pub open spec fn init(c: (Seq<AppSpec::Constants>), post: Self) -> bool {
         &&& c.len() == post.apps.len()
@@ -87,13 +92,17 @@ impl<AppSpec: ApplicationSpec> Host<AppSpec> {
     }
 
     pub open spec fn inv(s: Self) -> bool {
+        // socket inboxes and outboxes correspond
         &&& s.socket_in.dom() == s.socket_out.dom()
+        // all sockets are for the host's IP address
         &&& forall |c| #[trigger] s.socket_in.dom().contains(c) ==> {
             &&& c.local.ip == s.ip
         }
+        // all applications use socket connections that are actually present
         &&& forall |i| #![trigger s.apps[i]] 0 <= i < s.apps.len() ==> {
             &&& s.apps[i].conns().subset_of(s.socket_in.dom())
         }
+        // all applications use disjoint sets of sockets
         &&& forall |i, j| 0 <= i < s.apps.len() && 0 <= j < s.apps.len() && i != j ==> {
             s.apps[i].conns().disjoint(s.apps[j].conns())
         }    

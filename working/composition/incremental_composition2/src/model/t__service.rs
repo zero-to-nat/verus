@@ -5,6 +5,8 @@ use crate::model::t__socket::*;
 
 verus! {
 
+// A service is specified as a state machine which can receive messages and send messages on a set of sockets (conns()).
+// Note that instead of defining the sender and receiver on each message, MessageOps stores each message along with the socket that it is associated with.
 pub trait ServiceSpec<S : Parse, T : Parse> : Sized {
     type Constants;
 
@@ -18,6 +20,9 @@ pub trait ServiceSpec<S : Parse, T : Parse> : Sized {
         ;
 }
 
+// Model of a service running on a host with a given IP address and sockets.
+// This is used to model the receipt of messages on a socket and sending of messages to a socket
+// in a trusted definition that is separate from the user's service definition (step_recv).
 #[verifier::reject_recursive_types(S)]
 #[verifier::reject_recursive_types(T)]
 pub struct Service<S : Parse, T : Parse, Svc : ServiceSpec<S, T>> {
@@ -71,6 +76,7 @@ impl<S : Parse, T : Parse, Svc : ServiceSpec<S, T>> Service<S, T, Svc> {
     }
 }
 
+// User-defined invariants for a given service definition.
 pub trait ServiceInvariants<S : Parse, T : Parse, Svc: ServiceSpec<S, T>> :  {
     spec fn inv(s: Service<S, T, Svc>) -> bool
         ;

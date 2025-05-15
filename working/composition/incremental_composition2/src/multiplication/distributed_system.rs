@@ -18,6 +18,7 @@ use crate::multiplication::host::*;
 
 verus! {
 
+// Todo - helper lemmas to prove
 #[verifier::external_body]
 proof fn set_union_disjoint_len<T>(a: Set<T>, b: Set<T>)
     requires
@@ -49,6 +50,7 @@ pub proof fn inductive_multiplication(a: u32, b: u32, s: u32)
     ensures s == (a + 1) * b
 {}
 
+// Define the config for the sub-system containing only the multiplication host.
 pub struct InductiveMultiplicationDistributedSystemConfig {}
 
 impl DistributedSystemConfig<InductiveMultiplicationApplicationSpec> for InductiveMultiplicationDistributedSystemConfig {
@@ -59,11 +61,12 @@ impl DistributedSystemConfig<InductiveMultiplicationApplicationSpec> for Inducti
     }
 }
 
+// Define the invariants on the multiplication sub-system.
 pub struct InductiveMultiplicationDistributedSystemInvariants {}
 
 impl DistributedSystemInvariants<InductiveMultiplicationApplicationSpec, InductiveMultiplicationDistributedSystemConfig> for InductiveMultiplicationDistributedSystemInvariants {
     open spec fn inv(s: DistributedSystem<InductiveMultiplicationApplicationSpec>) -> bool {
-        InductiveMultiplicationDistributedSystemConfig::config(s)
+        &&& InductiveMultiplicationDistributedSystemConfig::config(s)
     }
 
     proof fn init_inv(c: (Map<IPAddress, (Seq<<InductiveMultiplicationApplicationSpec as ApplicationSpec>::Constants>)>), post: DistributedSystem<InductiveMultiplicationApplicationSpec>)
@@ -73,6 +76,11 @@ impl DistributedSystemInvariants<InductiveMultiplicationApplicationSpec, Inducti
     {}
 }
 
+// Refine the config for the composition of the multiplication sub-system and the addition sub-system.
+// This ensures that the socket connection that the multiplication host uses corresponds to that for the addition service.
+// This definition is parameterized on any ApplicationSpec, DistributedSystemConfig, and DistributedSystemInvariants that refine the AdditionService.
+// This is represented by the final parameter which constitutes the corresponding refinement proof 
+// (of type Refinement<AdditionRequest, AdditionReply, AdditionService, AppSpec, Config, Invariants>).
 pub struct InductiveMultiplicationDistributedSystemCompositionConfig<AppSpec: ApplicationSpec,
     Config: DistributedSystemConfig<AppSpec>,
     Invariants: DistributedSystemInvariants<AppSpec, Config>,
@@ -98,8 +106,8 @@ for InductiveMultiplicationDistributedSystemCompositionConfig<AppSpec, Config, I
     }
 }
 
-
-// compose with any system that refines AdditionService
+// Define the invariants for the composition.
+// These will be used to complete the refinement proof for the composition to the multiplication service.
 pub struct InductiveMultiplicationDistributedSystemCompositionInvariants<AppSpec: ApplicationSpec,
     Config: DistributedSystemConfig<AppSpec>,
     Invariants: DistributedSystemInvariants<AppSpec, Config>,

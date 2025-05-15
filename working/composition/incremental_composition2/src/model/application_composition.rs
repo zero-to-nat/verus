@@ -4,7 +4,7 @@ use crate::model::t__application_spec::*;
 
 verus! {
 
-// A binary option between two application specs. Used for polymorphic composition of applications on a host
+// A binary option between two application specs. Used for polymorphic composition of applications.
 pub enum ApplicationSpecComposition<A: ApplicationSpec, B: ApplicationSpec> {
     A(A),
     B(B)
@@ -15,6 +15,7 @@ pub enum ApplicationSpecCompositionConstants<A: ApplicationSpec, B: ApplicationS
     B(B::Constants)
 }
 
+// Implement the application spec state machine by unfolding the underlying definition.
 impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpec for ApplicationSpecComposition<A, B> {
     type Constants = ApplicationSpecCompositionConstants<A, B>;
 
@@ -87,47 +88,6 @@ impl<A: ApplicationSpec, B: ApplicationSpec> ApplicationSpecComposition<A, B> {
             ApplicationSpecComposition::B(app) => Some(app)
         }
     }
-
-    pub open spec fn commute(self) -> ApplicationSpecComposition<B, A> {
-        match self {
-            ApplicationSpecComposition::A(app) => ApplicationSpecComposition::B(app),
-            ApplicationSpecComposition::B(app) => ApplicationSpecComposition::A(app)
-        }
-    }
-}
-
-impl<A: ApplicationSpec, B: ApplicationSpec, C: ApplicationSpec> ApplicationSpecComposition<A, ApplicationSpecComposition<B, C>>
-{
-    pub open spec fn associate(self) -> ApplicationSpecComposition<ApplicationSpecComposition<A, B>, C> {
-        match self {
-            ApplicationSpecComposition::A(app) => ApplicationSpecComposition::A(ApplicationSpecComposition::A(app)),
-            ApplicationSpecComposition::B(ApplicationSpecComposition::A(app)) => ApplicationSpecComposition::A(ApplicationSpecComposition::B(app)),
-            ApplicationSpecComposition::B(ApplicationSpecComposition::B(app)) => ApplicationSpecComposition::B(app),
-        }
-    }
-
-}
-
-// Application which uses no socket connections and does nothing
-pub struct EmptyApplication {}
-
-impl ApplicationSpec for EmptyApplication {
-    type Constants = ();
-
-    open spec fn conns(&self) -> Set<SocketConnection> {
-        Set::<SocketConnection>::empty()
-    }
-
-    open spec fn init(c: Self::Constants, post: Self) -> bool {
-        false
-    }
-
-    open spec fn next(pre: Self, post: Self, msg_ops: MessageOps<Seq<u8>, Seq<u8>>) -> bool {
-        false
-    }
-
-    proof fn next_impl(pre: Self, post: Self, msg_ops: MessageOps<Seq<u8>, Seq<u8>>)
-    {}
 }
 
 }

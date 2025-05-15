@@ -5,6 +5,9 @@ use crate::model::t__host::*;
 
 verus! {
 
+// This definition is used for polymorphism within a distributed system.
+// This host composition assumes that all applications on a given host are either type A or type B 
+// (which themselves can be compositions of distinct application specs).
 impl<A: ApplicationSpec, B: ApplicationSpec> Host<ApplicationSpecComposition<A, B>> {
     pub open spec fn get_impl_first(self) -> Option<Host<A>> {
         if (forall |i| #![trigger self.apps[i]] 0 <= i < self.apps.len() ==> self.apps[i].get_impl_first().is_some())

@@ -9,6 +9,7 @@ pub open spec fn to_msgs_spec(map: HashMap<SocketConnection, Vec<Vec<u8>>>) -> M
     Map::new(|c| map@.dom().contains(c), |c| map@[c]@.to_set().map(|m: Vec<u8>| m@))
 }
 
+// This is defining the refinement obligations for an implementation of an application spec.
 pub trait ApplicationImpl<AppSpec: ApplicationSpec> : Sized {
     type Constants;
 

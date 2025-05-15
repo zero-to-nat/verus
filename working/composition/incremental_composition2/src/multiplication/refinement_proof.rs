@@ -18,6 +18,7 @@ use crate::multiplication::distributed_system::*;
 
 verus! {
 
+// The refinement proof is again parameterized on any system which refines the addition service.
 pub struct MultiplicationRefinement<AppSpec: ApplicationSpec,
     Config: DistributedSystemConfig<AppSpec>,
     Invariants: DistributedSystemInvariants<AppSpec, Config>,
