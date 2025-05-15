@@ -67,10 +67,14 @@ for DistributedSystemInvariantsComposition<A, B, ConfigA, ConfigB, InvA, InvB> {
         &&& (forall |ip| #[trigger] hosts_b.contains(ip) ==> Host::get_impl_second(ds.hosts[ip]).is_some())
         &&& InvA::inv(DistributedSystem { hosts: ds.hosts.restrict(hosts_a).map_values(|h| Host::get_impl_first(h).unwrap()) })
         &&& InvB::inv(DistributedSystem { hosts: ds.hosts.restrict(hosts_b).map_values(|h| Host::get_impl_second(h).unwrap()) })
+        &&& DistributedSystem::inv(ds)
+        &&& DistributedSystemConfigComposition::<A, B, ConfigA, ConfigB>::config(ds)
     }
 
     proof fn init_inv(c: (Map<IPAddress, (Seq<<ApplicationSpecComposition<A, B> as ApplicationSpec>::Constants>)>), post: DistributedSystem<ApplicationSpecComposition<A, B>>)
     {
+        DistributedSystem::init_inv(c, post);
+
         let post_ip_a = Set::new(|ip| post.hosts.dom().contains(ip) && Host::get_impl_first(post.hosts[ip]).is_some());
         let post_ip_b = Set::new(|ip| post.hosts.dom().contains(ip) && !post_ip_a.contains(ip));
         let post_hosts_a = post.hosts.restrict(post_ip_a).map_values(|h| Host::get_impl_first(h).unwrap());
@@ -155,6 +159,8 @@ for DistributedSystemInvariantsComposition<A, B, ConfigA, ConfigB, InvA, InvB> {
 
     proof fn next_inv(pre: DistributedSystem<ApplicationSpecComposition<A, B>>, post: DistributedSystem<ApplicationSpecComposition<A, B>>, external_sockets: Map<SocketConnection, SocketOut<Seq<u8>>>)
     {
+        DistributedSystem::next_inv(pre, post, external_sockets);
+
         let ip = choose |ip| {
             &&& pre.hosts.dom().contains(ip)
             &&& Host::next(#[trigger] pre.hosts[ip], post.hosts[ip], external_sockets.union_prefer_right(pre.union_socket_out()))

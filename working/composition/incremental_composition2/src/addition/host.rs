@@ -12,6 +12,7 @@ impl HostConfig<AdditionApplicationSpec> for AdditionHostConfig {
         &&& host.apps.len() == 1
         &&& host.ip == 0
         &&& host.apps[0].conn.local == Endpoint { ip: 0, port: 0 }
+        &&& host.apps[0].conn.remote == Endpoint { ip: 1, port: 1 } // todo - this shouldn't be preconfigured?
     }
 }
 

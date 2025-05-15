@@ -29,12 +29,14 @@ impl InductiveMultiplicationApplicationSpec {
     {
         let request = MultiplicationRequest::parse_spec(recv).unwrap();
         let add_request = AdditionRequest::parse_spec(send).unwrap();
-        &&& msg_ops.recv.dom() == Set::<SocketConnection>::empty().insert(pre.client_conn)
-        &&& msg_ops.send.dom() == Set::<SocketConnection>::empty().insert(pre.addition_conn)
+        &&& msg_ops.recv.dom() == Set::<SocketConnection>::empty().insert(pre.addition_conn).insert(pre.client_conn)
+        &&& msg_ops.send.dom() == Set::<SocketConnection>::empty().insert(pre.addition_conn).insert(pre.client_conn)
         &&& msg_ops.recv[pre.client_conn].contains(recv)
         &&& (forall |m| msg_ops.recv[pre.client_conn].contains(m) ==> m == recv)
+        &&& msg_ops.recv[pre.addition_conn] == Set::<Seq<u8>>::empty()
         &&& msg_ops.send[pre.addition_conn].contains(send)
         &&& (forall |m| msg_ops.send[pre.addition_conn].contains(m) ==> m == send)
+        &&& msg_ops.send[pre.client_conn] == Set::<Seq<u8>>::empty()
         &&& #[trigger] MultiplicationRequest::parse_spec(recv).is_some()
         &&& #[trigger] AdditionRequest::parse_spec(send).is_some()
         &&& !pre.requests.contains(request)
@@ -61,12 +63,14 @@ impl InductiveMultiplicationApplicationSpec {
         let add_request = AdditionRequest::parse_spec(send).unwrap();
         let mult_request = pre.seq_no_assgn[add_reply.seq_no];
         let first_seq_no = pre.first_seq_no[mult_request];
-        &&& msg_ops.recv.dom() == Set::<SocketConnection>::empty().insert(pre.addition_conn)
-        &&& msg_ops.send.dom() == Set::<SocketConnection>::empty().insert(pre.addition_conn)
+        &&& msg_ops.recv.dom() == Set::<SocketConnection>::empty().insert(pre.addition_conn).insert(pre.client_conn)
+        &&& msg_ops.send.dom() == Set::<SocketConnection>::empty().insert(pre.addition_conn).insert(pre.client_conn)
         &&& msg_ops.recv[pre.addition_conn].contains(recv)
         &&& (forall |m| msg_ops.recv[pre.addition_conn].contains(m) ==> m == recv)
+        &&& msg_ops.recv[pre.client_conn] == Set::<Seq<u8>>::empty()
         &&& msg_ops.send[pre.addition_conn].contains(send)
         &&& (forall |m| msg_ops.send[pre.addition_conn].contains(m) ==> m == send)
+        &&& msg_ops.send[pre.client_conn] == Set::<Seq<u8>>::empty()
         &&& #[trigger] AdditionReply::parse_spec(recv).is_some()
         &&& #[trigger] AdditionRequest::parse_spec(send).is_some()
         &&& post.client_conn == pre.client_conn
@@ -94,12 +98,14 @@ impl InductiveMultiplicationApplicationSpec {
         let mult_reply = MultiplicationReply::parse_spec(send).unwrap();
         let mult_request = pre.seq_no_assgn[add_reply.seq_no];
         let first_seq_no = pre.first_seq_no[mult_request];
-        &&& msg_ops.recv.dom() == Set::<SocketConnection>::empty().insert(pre.addition_conn)
-        &&& msg_ops.send.dom() == Set::<SocketConnection>::empty().insert(pre.client_conn)
+        &&& msg_ops.recv.dom() == Set::<SocketConnection>::empty().insert(pre.addition_conn).insert(pre.client_conn)
+        &&& msg_ops.send.dom() == Set::<SocketConnection>::empty().insert(pre.addition_conn).insert(pre.client_conn)
         &&& msg_ops.recv[pre.addition_conn].contains(recv)
         &&& (forall |m| msg_ops.recv[pre.addition_conn].contains(m) ==> m == recv)
+        &&& msg_ops.recv[pre.client_conn] == Set::<Seq<u8>>::empty()
         &&& msg_ops.send[pre.client_conn].contains(send)
         &&& (forall |m| msg_ops.send[pre.client_conn].contains(m) ==> m == send)
+        &&& msg_ops.send[pre.addition_conn] == Set::<Seq<u8>>::empty()
         &&& #[trigger] AdditionReply::parse_spec(recv).is_some()
         &&& #[trigger] MultiplicationReply::parse_spec(send).is_some()
         &&& post.client_conn == pre.client_conn

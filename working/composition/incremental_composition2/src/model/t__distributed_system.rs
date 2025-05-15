@@ -38,7 +38,6 @@ impl<AppSpec: ApplicationSpec> DistributedSystem<AppSpec> {
                 pre.hosts[other_ip] == post.hosts[other_ip]
             }
         }
-        //&&& (forall |ip| #[trigger] pre.hosts.dom().contains(ip) ==> pre.hosts[ip].socket_out.dom().disjoint(external_sockets.dom()))
         &&& pre.hosts.dom() == post.hosts.dom()
     }
 
@@ -46,7 +45,14 @@ impl<AppSpec: ApplicationSpec> DistributedSystem<AppSpec> {
         &&& forall |ip| #[trigger] s.hosts.dom().contains(ip) ==> {
             &&& s.hosts[ip].ip == ip
             &&& Host::inv(s.hosts[ip])
-        }    
+        }
+        &&& forall |ip| #[trigger] s.hosts.dom().contains(ip) ==> {
+            forall |c: SocketConnection| #![trigger s.hosts[c.remote.ip]] s.hosts[ip].socket_in.dom().contains(c) && s.hosts.dom().contains(c.remote.ip) && s.hosts[c.remote.ip].socket_in.dom().contains(c.to_remote()) ==> {
+                forall |msg| #[trigger] s.hosts[ip].socket_in[c].received.contains(msg) ==> {
+                    &&& s.hosts[c.remote.ip].socket_out[c.to_remote()].sent.contains(msg)
+                }
+            }
+        }  
     }
 
     pub proof fn init_inv(c: (Map<IPAddress, (Seq<AppSpec::Constants>)>), post: Self)
@@ -97,9 +103,11 @@ pub trait DistributedSystemInvariants<AppSpec: ApplicationSpec, Config: Distribu
     proof fn next_inv(pre: DistributedSystem<AppSpec>, post: DistributedSystem<AppSpec>, external_sockets: Map<SocketConnection, SocketOut<Seq<u8>>>)
         requires 
             Self::inv(pre),
-            DistributedSystem::next(pre, post, external_sockets)
+            DistributedSystem::next(pre, post, external_sockets),
+            Config::config(pre)
         ensures 
-            Self::inv(post)
+            Self::inv(post),
+            Config::config(post)
         ;
 }
 }

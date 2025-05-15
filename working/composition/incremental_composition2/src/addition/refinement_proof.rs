@@ -23,23 +23,26 @@ impl Refinement<AdditionRequest,
     AdditionDistributedSystemConfig,
     AdditionDistributedSystemInvariants> 
 for AdditionRefinement {
-    open spec fn svc_state_abs(ds: DistributedSystem<AdditionApplicationSpec>) -> AdditionService {
-        AdditionService { conn: ds.hosts[0].apps[0].conn }
+    open spec fn svc_state_abs(ds: DistributedSystem<AdditionApplicationSpec>) -> (AdditionService, IPAddress) {
+        (AdditionService { conn: ds.hosts[0].apps[0].conn }, 0)
+    }
+
+    proof fn svc_state_validity(ds: DistributedSystem<AdditionApplicationSpec>)
+    {}
+
+    proof fn parsed_socket_out_validity(ds: DistributedSystem<AdditionApplicationSpec>)
+    { 
     }
     
     open spec fn c_abs(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>)>)) -> <AdditionService as ServiceSpec<AdditionRequest, AdditionReply>>::Constants {
         c[0][0]
     }
 
-    open spec fn conns_abs(ds: DistributedSystem<AdditionApplicationSpec>) -> (IPAddress, Set<SocketConnection>) {
-        (0, set!{ ds.hosts[0].apps[0].conn })
-    }
-
     proof fn init_refinement(c: (Map<IPAddress, (Seq<<AdditionApplicationSpec as ApplicationSpec>::Constants>)>), post: DistributedSystem<AdditionApplicationSpec>)
     {
         assert(AdditionDistributedSystemConfig::config(post));
         let ip = 0;
-        let service = service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post));
+        let service = service_abs(post, Self::svc_state_abs(post));
         let service_conns = service.service.conns();
 
         assert(Host::init(c[ip], post.hosts[ip]));
@@ -60,8 +63,8 @@ for AdditionRefinement {
     {
         let ip = 0;
         let i = 0;
-        let pre_service = service_abs(pre, Self::svc_state_abs(pre), Self::conns_abs(pre));
-        let post_service = service_abs(post, Self::svc_state_abs(post), Self::conns_abs(post));
+        let pre_service = service_abs(pre, Self::svc_state_abs(pre));
+        let post_service = service_abs(post, Self::svc_state_abs(post));
 
         DistributedSystem::next_inv(pre, post, external_sockets);
         AdditionDistributedSystemInvariants::next_inv(pre, post, external_sockets);
