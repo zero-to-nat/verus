@@ -35,11 +35,16 @@ pub trait ApplicationImpl<AppSpec: ApplicationSpec> : Sized {
 
     fn next(&mut self, recv: (SocketConnection, Vec<u8>)) -> (send: (Option<HashMap<SocketConnection, Vec<Vec<u8>>>>))
         requires
-            old(self).inv()
+            old(self).inv(),
+            Self::abs(*old(self)).conns().contains(recv.0)
         ensures
             self.inv(),
             (send.is_none() && Self::abs(*old(self)) == Self::abs(*self)) 
-            || (send.is_some() && AppSpec::next(Self::abs(*old(self)), Self::abs(*self), MessageOps { recv: map![recv.0 => set! {recv.1@}], send: to_msgs_spec(send.unwrap()) }))
+            || ({
+                &&& send.is_some() 
+                &&& AppSpec::next(Self::abs(*old(self)), Self::abs(*self), MessageOps { recv: map![recv.0 => set! {recv.1@}], send: to_msgs_spec(send.unwrap()) })
+                &&& forall |c| #[trigger] send.unwrap()@.dom().contains(c) ==> Self::abs(*self).conns().contains(c)
+            })
         ;
 }
 }
