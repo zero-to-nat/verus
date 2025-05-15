@@ -18,6 +18,37 @@ use crate::multiplication::host::*;
 
 verus! {
 
+#[verifier::external_body]
+proof fn set_union_disjoint_len<T>(a: Set<T>, b: Set<T>)
+    requires
+        a.disjoint(b)
+    ensures
+        a.union(b).len() == a.len() + b.len()
+{}
+
+#[verifier::external_body]
+proof fn set_new_bounds(n: nat, m: u32)
+    ensures Set::new(|x: u32| n <= x < n + m).len() == m
+{}
+
+#[verifier::external_body]
+proof fn map_union_disjoint_values<U, V>(m1: Map<U, V>, m2: Map<U, V>)
+    requires 
+        m1.dom().disjoint(m2.dom())
+    ensures m1.union_prefer_right(m2).values() == m1.values().union(m2.values())
+{}
+
+#[verifier::external_body]
+proof fn set_new_value_single<K, V>(fk: spec_fn(K) -> bool, v: V)
+    ensures Map::new(fk, |k| v).values() == set!{ v }
+{}
+
+#[verifier::external_body]
+pub proof fn inductive_multiplication(a: u32, b: u32, s: u32) 
+    requires s == (a * b) + b
+    ensures s == (a + 1) * b
+{}
+
 pub struct InductiveMultiplicationDistributedSystemConfig {}
 
 impl DistributedSystemConfig<InductiveMultiplicationApplicationSpec> for InductiveMultiplicationDistributedSystemConfig {
@@ -252,18 +283,27 @@ for InductiveMultiplicationDistributedSystemCompositionInvariants<AppSpec, Confi
                         }
 
                         let request = MultiplicationRequest::parse_spec(recv).unwrap();
+                        let new_assignments = Map::new(|seq_no: SeqNo| pre_app.seq_no_assgn.len() <= seq_no < pre_app.seq_no_assgn.len() + request.x, |s| request);
+                        assert(new_assignments.dom().disjoint(pre_app.seq_no_assgn.dom()));
+                        assert(post_app.seq_no_assgn.dom() == pre_app.seq_no_assgn.dom().union(new_assignments.dom()));
+                        set_union_disjoint_len(pre_app.seq_no_assgn.dom(), new_assignments.dom());
+                        set_new_bounds(pre_app.seq_no_assgn.len(), request.x);
+                        assert(Set::new(|seq_no: SeqNo| pre_app.seq_no_assgn.len() <= seq_no < pre_app.seq_no_assgn.len() + request.x).len() == request.x);
+                        assert(post_app.seq_no_assgn.dom().len() == pre_app.seq_no_assgn.dom().len() + request.x);
+                        map_union_disjoint_values(pre_app.seq_no_assgn, new_assignments);
+                        set_new_value_single(|seq_no: SeqNo| pre_app.seq_no_assgn.len() <= seq_no < pre_app.seq_no_assgn.len() + request.x, request);
+                        assert(post_app.seq_no_assgn.values() == pre_app.seq_no_assgn.values().insert(request));
                         assert(post_app.requests =~= post_app.intermediate_results.dom());
                         assert(post_app.requests =~= post_app.first_seq_no.dom());
-                        assume(post_app.seq_no_assgn.values() == pre_app.seq_no_assgn.values().insert(request));
                         assert(post_app.requests =~= post_app.seq_no_assgn.values());
-                        assume(post_app.seq_no_assgn.len() == pre_app.seq_no_assgn.len() + request.x);
-                        assume(forall |seq_no: SeqNo| 0 <= seq_no < post_app.seq_no_assgn.len() <==> post_app.seq_no_assgn.dom().contains(seq_no));
+                        assert(Set::new(|seq_no: SeqNo| 0 <= seq_no < post_app.seq_no_assgn.len()) == post_app.seq_no_assgn.dom());
+                        assert(forall |seq_no: SeqNo| 0 <= seq_no < post_app.seq_no_assgn.len() <==> post_app.seq_no_assgn.dom().contains(seq_no));
                         assert((forall |seq_no| #[trigger] post_app.seq_no_assgn.dom().contains(seq_no) ==> {
                             &&& post_app.requests.contains(post_app.seq_no_assgn[seq_no])
                             &&& post_app.first_seq_no.dom().contains(post_app.seq_no_assgn[seq_no])
                             &&& post_app.first_seq_no[post_app.seq_no_assgn[seq_no]] <= seq_no < post_app.first_seq_no[post_app.seq_no_assgn[seq_no]] + post_app.seq_no_assgn[seq_no].x
                         }));
-                        assume(forall |req| #[trigger] post_app.first_seq_no.dom().contains(req) ==> {
+                        assert(forall |req| #[trigger] post_app.first_seq_no.dom().contains(req) ==> {
                             forall |seq_no| post_app.first_seq_no[req] <= seq_no < post_app.first_seq_no[req] + req.x ==> {
                                 &&& #[trigger] post_app.seq_no_assgn.dom().contains(seq_no)
                                 &&& post_app.seq_no_assgn[seq_no] == req
@@ -420,8 +460,7 @@ for InductiveMultiplicationDistributedSystemCompositionInvariants<AppSpec, Confi
                             &&& addition_req.y == mult_req.y
                         });
                         assert(addition_repl.sum == (addition_req.seq_no - pre_mult_host.apps[0].first_seq_no[mult_req]) * mult_req.y + mult_req.y);
-                        // todo
-                        assume(addition_repl.sum == (addition_req.seq_no - pre_mult_host.apps[0].first_seq_no[mult_req] + 1) * mult_req.y);
+                        inductive_multiplication((addition_req.seq_no - pre_mult_host.apps[0].first_seq_no[mult_req]) as u32, mult_req.y, addition_repl.sum);
                         assert(inv_mult_inductive_received_impl(pre_mult_host.apps[0], msg));
                     }
                 }
