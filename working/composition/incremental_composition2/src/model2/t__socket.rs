@@ -1,0 +1,108 @@
+use vstd::prelude::*;
+use crate::model2::t__types::*;
+
+verus! {
+
+// A SocketConnection is local to a host: it defines its own endpoint and the remote endpoint on the other host for this socket.
+#[derive(Hash)]
+pub struct SocketConnection {
+    pub local: Endpoint,
+    pub remote: Endpoint,
+}
+
+impl SocketConnection {
+    pub open spec fn to_remote(&self) -> SocketConnection {
+        SocketConnection { local: self.remote, remote: self.local }
+    }
+
+    pub open spec fn eq_spec(&self, other: &Self) -> bool {
+        &&& self.local.ip == other.local.ip
+        &&& self.local.port == other.local.port
+        &&& self.remote.ip == other.remote.ip
+        &&& self.remote.port == other.remote.port
+    }        
+}
+
+impl PartialEq for SocketConnection {
+    fn eq(&self, other: &Self) -> (out: bool)
+        ensures out == self.eq_spec(other)
+    {
+        &&& self.local.ip == other.local.ip
+        &&& self.local.port == other.local.port
+        &&& self.remote.ip == other.remote.ip
+        &&& self.remote.port == other.remote.port
+    }
+}
+
+impl Eq for SocketConnection {}
+
+impl Clone for SocketConnection {
+    fn clone(&self) -> Self {
+        SocketConnection { local: self.local.clone(), remote: self.remote.clone() }
+    }
+}
+
+impl Copy for SocketConnection {
+}
+
+#[verifier::reject_recursive_types(S)]
+#[verifier::reject_recursive_types(T)]
+pub struct MessageOps<S, T> { 
+    pub recv: Map<SocketConnection, Set<S>>, 
+    pub send: Map<SocketConnection, Set<T>>
+}
+
+// State machine for sending messages on a socket (or, "writing" to the socket)
+#[verifier::reject_recursive_types(T)]
+pub struct SocketOut<T> {
+    pub conn: SocketConnection,
+    pub sent: Set<T>,
+}
+
+impl<T> SocketOut<T> {
+    pub open spec fn init(conn: SocketConnection, post: Self) -> bool {
+        &&& post.conn == conn
+        &&& post.sent == Set::<T>::empty()
+    }
+
+    pub open spec fn next(pre: Self, post: Self, msgs: Set<T>) -> bool {
+        &&& pre.conn == post.conn
+        &&& post.sent == pre.sent.union(msgs)
+    }
+}
+
+#[verifier::reject_recursive_types(T)]
+pub struct SocketIn<T> {
+    pub conn: SocketConnection,
+    pub received: Set<T>,
+}
+
+// State machine for receiving messages on a socket.
+// The can_read transition defines when it is valid to "read" a given set of messages from the socket.
+impl<T> SocketIn<T> {
+    pub open spec fn is_remote(s: Self, other: SocketOut<T>) -> bool {
+        &&& s.conn.local == other.conn.remote
+        &&& s.conn.remote == other.conn.local
+    }
+
+    pub open spec fn can_read(s: Self, msgs: Set<T>) -> bool {
+        msgs.subset_of(s.received)
+    }
+
+    pub open spec fn init(conn: SocketConnection, post: Self) -> bool {
+        &&& post.conn == conn
+        &&& post.received == Set::<T>::empty()
+    }
+
+    pub open spec fn next(pre: Self, post: Self, remote: SocketOut<T>) -> bool {
+        &&& Self::is_remote(pre, remote)
+        &&& pre.conn == post.conn
+        &&& pre.received.subset_of(post.received)
+        // we can receive any message from the remote socket, but we need not receive all of them
+        &&& (forall |m| #[trigger] post.received.contains(m) ==> {
+            ||| pre.received.contains(m)
+            ||| remote.sent.contains(m)
+        })
+    }
+}
+}

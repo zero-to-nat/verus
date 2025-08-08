@@ -190,7 +190,6 @@ impl<Mshl: Marshall<AdditionRequest, AdditionReply>> MultiplicationDSImpl<Mshl> 
         let parsed_resp = self.marshaller.parse_reply(&pkt.msg).unwrap();
         
         proof {
-
             let tracked (add_inst, add_tok, _) = recv_tup.1;
             add_inst.service_correspondence(add_tok.element(), &add_tok);
             assert(self.in_flight@.unwrap().id == add_tok.element().0.id);

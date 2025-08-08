@@ -7,6 +7,7 @@ tokenized_state_machine! {
     #[verifier::reject_recursive_types(S)]
     #[verifier::reject_recursive_types(T)]
     ServiceSM<S, T> {
+        // we want to add abstract state back!
         fields {
             #[sharding(variable)]
             pub requests: Set<S>,
